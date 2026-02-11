@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/inventory_service.dart';
+import '../settings/global_settings.dart';
 
 class ShoppingCard extends StatelessWidget {
   final QueryDocumentSnapshot doc;
@@ -12,13 +13,11 @@ class ShoppingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = doc.data() as Map<String, dynamic>;
 
-    double total = (data["truckAmount"] ?? 0.0) +
-        (data["homeAmount"] ?? 0.0);
-    double per = data["amountPerService"] ?? 1.0;
-    int buffer = data["desiredBufferServices"] ?? 0;
-
-    double target = per * buffer;
-    double suggested = target - total;
+    double total = (data["truckAmount"] ?? 0.0) + (data["homeAmount"] ?? 0.0);
+    String unitType = data["unitType"] ?? "units";
+    double optimal =
+        (data["qtyPerService"] ?? 1.0) * GlobalSettings.planForServices;
+    double suggested = optimal - total;
     if (suggested < 0) suggested = 0;
 
     return Card(
@@ -26,7 +25,8 @@ class ShoppingCard extends StatelessWidget {
       child: ListTile(
         title: Text(data["name"]),
         subtitle: Text(
-            "Suggested Buy: ${suggested.toStringAsFixed(1)}"),
+          "Suggested: ${suggested.toStringAsFixed(1)} ($unitType)",
+        ),
         trailing: ElevatedButton(
           child: const Text("Purchase"),
           onPressed: () => _purchaseDialog(context, suggested),
@@ -36,8 +36,9 @@ class ShoppingCard extends StatelessWidget {
   }
 
   void _purchaseDialog(BuildContext context, double suggested) {
-    final totalController =
-        TextEditingController(text: suggested.toStringAsFixed(1));
+    final totalController = TextEditingController(
+      text: suggested.toStringAsFixed(1),
+    );
     final truckController = TextEditingController(text: "0");
 
     showDialog(
@@ -49,13 +50,11 @@ class ShoppingCard extends StatelessWidget {
           children: [
             TextField(
               controller: totalController,
-              decoration:
-                  const InputDecoration(labelText: "Total Bought"),
+              decoration: const InputDecoration(labelText: "Total Bought"),
             ),
             TextField(
               controller: truckController,
-              decoration:
-                  const InputDecoration(labelText: "Add To Truck"),
+              decoration: const InputDecoration(labelText: "Add To Truck"),
             ),
           ],
         ),
@@ -70,7 +69,7 @@ class ShoppingCard extends StatelessWidget {
               Navigator.pop(context);
             },
             child: const Text("Save"),
-          )
+          ),
         ],
       ),
     );

@@ -13,7 +13,7 @@ class InventoryService {
     await _db.doc(id).update({
       field: snap(value),
       "updatedAt": FieldValue.serverTimestamp(),
-      "updatedBy": FirebaseAuth.instance.currentUser?.email
+      "updatedBy": FirebaseAuth.instance.currentUser?.email,
     });
   }
 
@@ -26,7 +26,7 @@ class InventoryService {
       "truckAmount": FieldValue.increment(truckAdd),
       "homeAmount": FieldValue.increment(homeAdd),
       "updatedAt": FieldValue.serverTimestamp(),
-      "updatedBy": FirebaseAuth.instance.currentUser?.email
+      "updatedBy": FirebaseAuth.instance.currentUser?.email,
     });
   }
 
@@ -34,7 +34,15 @@ class InventoryService {
     await _db.add({
       ...data,
       "updatedAt": FieldValue.serverTimestamp(),
-      "updatedBy": FirebaseAuth.instance.currentUser?.email
+      "updatedBy": FirebaseAuth.instance.currentUser?.email,
+    });
+  }
+
+  Future<void> updateItem(String id, Map<String, dynamic> data) async {
+    await _db.doc(id).update({
+      ...data,
+      "updatedAt": FieldValue.serverTimestamp(),
+      "updatedBy": FirebaseAuth.instance.currentUser?.email,
     });
   }
 }
