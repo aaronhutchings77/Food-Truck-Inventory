@@ -49,6 +49,16 @@ class InventoryCard extends StatelessWidget {
       subtitle += "\nModel: $model";
     }
 
+    // Show last checked timestamp
+    final lastCheckedAt = data["lastCheckedAt"] as Timestamp?;
+    if (showCheckButton) {
+      if (lastCheckedAt != null) {
+        subtitle += "\n✓ Checked: ${_formatTimestamp(lastCheckedAt)}";
+      } else {
+        subtitle += "\n⚠ Never checked";
+      }
+    }
+
     return Card(
       color: status.withValues(alpha: 0.1),
       margin: const EdgeInsets.all(8),
@@ -111,6 +121,26 @@ class InventoryCard extends StatelessWidget {
           duration: Duration(seconds: 1),
         ),
       );
+    }
+  }
+
+  String _formatTimestamp(Timestamp timestamp) {
+    final dateTime = timestamp.toDate();
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inMinutes < 1) {
+      return "Just now";
+    } else if (difference.inMinutes < 60) {
+      return "${difference.inMinutes}m ago";
+    } else if (difference.inHours < 24) {
+      return "${difference.inHours}h ago";
+    } else if (difference.inDays == 1) {
+      return "Yesterday";
+    } else if (difference.inDays < 7) {
+      return "${difference.inDays}d ago";
+    } else {
+      return "${dateTime.month}/${dateTime.day} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
     }
   }
 
