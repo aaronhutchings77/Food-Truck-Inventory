@@ -59,6 +59,38 @@ class InventoryService {
     });
   }
 
+  Future<void> setTruckVerified(String id, bool verified) async {
+    final email = FirebaseAuth.instance.currentUser?.email;
+    if (verified) {
+      await _db.doc(id).update({
+        "truckVerifiedAt": FieldValue.serverTimestamp(),
+        "truckVerifiedBy": email,
+        "updatedAt": FieldValue.serverTimestamp(),
+        "updatedBy": email,
+      });
+    } else {
+      await _db.doc(id).update({
+        "truckVerifiedAt": null,
+        "truckVerifiedBy": null,
+        "updatedAt": FieldValue.serverTimestamp(),
+        "updatedBy": email,
+      });
+    }
+  }
+
+  Future<void> bulkUpdate(List<String> ids, Map<String, dynamic> fields) async {
+    final batch = FirebaseFirestore.instance.batch();
+    final email = FirebaseAuth.instance.currentUser?.email;
+    for (final id in ids) {
+      batch.update(_db.doc(id), {
+        ...fields,
+        "updatedAt": FieldValue.serverTimestamp(),
+        "updatedBy": email,
+      });
+    }
+    await batch.commit();
+  }
+
   Stream<QuerySnapshot> getItemsByFrequency(String frequency) {
     return _db.where("inventoryFrequency", isEqualTo: frequency).snapshots();
   }

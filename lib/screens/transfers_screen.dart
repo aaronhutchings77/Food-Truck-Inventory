@@ -11,6 +11,26 @@ class TransfersScreen extends StatefulWidget {
 }
 
 class _TransfersScreenState extends State<TransfersScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<QueryDocumentSnapshot> _filterBySearch(
+    List<QueryDocumentSnapshot> docs,
+  ) {
+    final query = _searchController.text.toLowerCase();
+    if (query.isEmpty) return docs;
+    return docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final name = (data["name"] ?? "").toLowerCase();
+      return name.contains(query);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Map<String, int>>(
@@ -20,79 +40,98 @@ class _TransfersScreenState extends State<TransfersScreen> {
           GlobalSettings.initialize(settingsSnapshot.data!);
         }
 
-        return StreamBuilder<QuerySnapshot>(
-          stream:
-              FirebaseFirestore.instance.collection("items").snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final docs = snapshot.data!.docs;
-
-            final List<_TransferItem> moveFromHome = [];
-            final List<_TransferItem> buyAndMove = [];
-            final List<_TransferItem> buyOnly = [];
-
-            for (final doc in docs) {
-              final data = doc.data() as Map<String, dynamic>;
-              final result = _classifyItem(data);
-              if (result == null) continue;
-
-              final item = _TransferItem(
-                doc: doc,
-                transferAmount: result.transferAmount,
-                truckRequired: result.truckRequired,
-                type: result.type,
-              );
-
-              switch (result.type) {
-                case "move":
-                  moveFromHome.add(item);
-                  break;
-                case "buyAndMove":
-                  buyAndMove.add(item);
-                  break;
-                case "buyOnly":
-                  buyOnly.add(item);
-                  break;
-              }
-            }
-
-            if (moveFromHome.isEmpty &&
-                buyAndMove.isEmpty &&
-                buyOnly.isEmpty) {
-              return const Center(
-                child: Text(
-                  "Truck is fully stocked!",
-                  style: TextStyle(fontSize: 18),
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                  labelText: "Search items...",
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
                 ),
-              );
-            }
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection("items")
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-            return ListView(
-              children: [
-                _collapsibleSection(
-                  "Move From Home",
-                  Icons.home,
-                  Colors.blue,
-                  moveFromHome,
-                ),
-                _collapsibleSection(
-                  "Buy + Move",
-                  Icons.shopping_cart,
-                  Colors.orange,
-                  buyAndMove,
-                ),
-                _collapsibleSection(
-                  "Buy Only",
-                  Icons.store,
-                  Colors.green,
-                  buyOnly,
-                ),
-              ],
-            );
-          },
+                  final docs = _filterBySearch(snapshot.data!.docs);
+
+                  final List<_TransferItem> moveFromHome = [];
+                  final List<_TransferItem> buyAndMove = [];
+                  final List<_TransferItem> buyOnly = [];
+
+                  for (final doc in docs) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    final result = _classifyItem(data);
+                    if (result == null) continue;
+
+                    final item = _TransferItem(
+                      doc: doc,
+                      transferAmount: result.transferAmount,
+                      truckRequired: result.truckRequired,
+                      type: result.type,
+                    );
+
+                    switch (result.type) {
+                      case "move":
+                        moveFromHome.add(item);
+                        break;
+                      case "buyAndMove":
+                        buyAndMove.add(item);
+                        break;
+                      case "buyOnly":
+                        buyOnly.add(item);
+                        break;
+                    }
+                  }
+
+                  if (moveFromHome.isEmpty &&
+                      buyAndMove.isEmpty &&
+                      buyOnly.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        "Truck is fully stocked!",
+                        style: TextStyle(fontSize: 18),
+                      ),
+                    );
+                  }
+
+                  return ListView(
+                    children: [
+                      _collapsibleSection(
+                        "Move From Home",
+                        Icons.home,
+                        Colors.blue,
+                        moveFromHome,
+                      ),
+                      _collapsibleSection(
+                        "Buy + Move",
+                        Icons.shopping_cart,
+                        Colors.orange,
+                        buyAndMove,
+                      ),
+                      _collapsibleSection(
+                        "Buy Only",
+                        Icons.store,
+                        Colors.green,
+                        buyOnly,
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
     );
@@ -111,8 +150,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
 
     // effectiveTruckTarget
     int? override = data["overrideTruckTargetServices"] as int?;
-    int effectiveTruckTarget =
-        override ?? GlobalSettings.truckTargetServices;
+    int effectiveTruckTarget = override ?? GlobalSettings.truckTargetServices;
 
     double truckRequired = usedPer * effectiveTruckTarget;
 
@@ -171,12 +209,14 @@ class _TransfersScreenState extends State<TransfersScreen> {
         ),
         initiallyExpanded: false,
         children: items
-            .map((item) => TransferCard(
-                  doc: item.doc,
-                  transferAmount: item.transferAmount,
-                  truckRequired: item.truckRequired,
-                  transferType: item.type,
-                ))
+            .map(
+              (item) => TransferCard(
+                doc: item.doc,
+                transferAmount: item.transferAmount,
+                truckRequired: item.truckRequired,
+                transferType: item.type,
+              ),
+            )
             .toList(),
       ),
     );
