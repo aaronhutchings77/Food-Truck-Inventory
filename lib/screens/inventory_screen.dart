@@ -144,6 +144,27 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _frequencyTab(String frequency) {
+    // For "service" tab, also include items without checkFrequency (legacy items)
+    if (frequency == "service") {
+      return StreamBuilder<QuerySnapshot>(
+        stream: _service.getAllItems(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final docs = _filterBySearch(snapshot.data!.docs).where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final checkFreq = data["checkFrequency"] as String?;
+            // Include items with "service" OR items without checkFrequency field
+            return checkFreq == "service" || checkFreq == null;
+          }).toList();
+
+          return _buildCategoryGroupedList(docs, frequency);
+        },
+      );
+    }
+
     return StreamBuilder<QuerySnapshot>(
       stream: _service.getItemsByFrequency(frequency),
       builder: (context, snapshot) {
