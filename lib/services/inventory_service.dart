@@ -45,4 +45,8 @@ class InventoryService {
       "updatedBy": FirebaseAuth.instance.currentUser?.email,
     });
   }
+
+  Future<void> deleteItem(String id) async {
+    await _db.doc(id).delete();
+  }
 }

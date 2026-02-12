@@ -27,9 +27,18 @@ class ShoppingCard extends StatelessWidget {
         subtitle: Text(
           "Suggested: ${suggested.toStringAsFixed(1)} ($unitType)",
         ),
-        trailing: ElevatedButton(
-          child: const Text("Purchase"),
-          onPressed: () => _purchaseDialog(context, suggested),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ElevatedButton(
+              child: const Text("Purchase"),
+              onPressed: () => _purchaseDialog(context, suggested),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _deleteConfirmation(context),
+            ),
+          ],
         ),
       ),
     );
@@ -66,9 +75,39 @@ class ShoppingCard extends StatelessWidget {
                 double.tryParse(totalController.text) ?? 0,
                 double.tryParse(truckController.text) ?? 0,
               );
-              Navigator.pop(context);
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
             },
             child: const Text("Save"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteConfirmation(BuildContext context) {
+    final data = doc.data() as Map<String, dynamic>;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete Item"),
+        content: Text(
+          "Are you sure you want to delete \"${data["name"]}\"? This action cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await service.deleteItem(doc.id);
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

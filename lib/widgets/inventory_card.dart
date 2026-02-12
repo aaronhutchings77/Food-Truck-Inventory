@@ -54,18 +54,55 @@ class InventoryCard extends StatelessWidget {
         child: ListTile(
           title: Text(data["name"]),
           subtitle: Text(subtitle),
-          trailing: IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EditItemScreen(doc: doc),
-                ),
-              );
-            },
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditItemScreen(doc: doc),
+                    ),
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _deleteConfirmation(context),
+              ),
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _deleteConfirmation(BuildContext context) {
+    final data = doc.data() as Map<String, dynamic>;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete Item"),
+        content: Text(
+          "Are you sure you want to delete \"${data["name"]}\"? This action cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await service.deleteItem(doc.id);
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
