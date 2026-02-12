@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/inventory_service.dart';
 
 class AddItemScreen extends StatefulWidget {
-  AddItemScreen({super.key});
+  const AddItemScreen({super.key});
 
   @override
   State<AddItemScreen> createState() => _AddItemScreenState();
@@ -22,18 +22,17 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final otherUnitController = TextEditingController();
 
   final List<String> unitOptions = [
+    'each',
     'case',
+    'box',
+    'carton',
     'dozen',
     'gallon',
-    'bottle',
-    'carton',
-    'box',
     'bag',
+    'bottle',
     'pack',
-    'container',
     'tray',
-    'each',
-    'Other...',
+    'other',
   ];
 
   @override
@@ -74,7 +73,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   "model": model.text,
                 });
 
-                Navigator.pop(context);
+                if (mounted) Navigator.pop(context);
               },
               child: const Text("Save"),
             ),
@@ -101,11 +100,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: selectedCategory,
+        initialValue: selectedCategory,
         decoration: const InputDecoration(labelText: "Category"),
         items: const [
           DropdownMenuItem(value: "food", child: Text("Food")),
-          DropdownMenuItem(value: "service", child: Text("Service")),
+          DropdownMenuItem(value: "supplies", child: Text("Supplies")),
           DropdownMenuItem(value: "equipment", child: Text("Equipment")),
         ],
         onChanged: (value) {
@@ -121,7 +120,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: selectedUnit,
+        initialValue: selectedUnit,
         decoration: const InputDecoration(labelText: "Unit Type"),
         items: unitOptions.map((String unit) {
           return DropdownMenuItem<String>(value: unit, child: Text(unit));

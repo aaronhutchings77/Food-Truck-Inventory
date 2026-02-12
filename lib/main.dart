@@ -3,12 +3,19 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/main_screen.dart';
+import 'services/settings_service.dart';
+import 'settings/global_settings.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize settings
+  final settingsService = SettingsService();
+  await settingsService.initializeDefaultSettings();
+  final target = await settingsService.getServicesTarget();
+  GlobalSettings.initializeServicesTarget(target);
+
   runApp(const MyApp());
 }
 

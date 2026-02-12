@@ -16,7 +16,7 @@ class ShoppingCard extends StatelessWidget {
     double total = (data["truckAmount"] ?? 0.0) + (data["homeAmount"] ?? 0.0);
     String unitType = data["unitType"] ?? "units";
     double optimal =
-        (data["qtyPerService"] ?? 1.0) * GlobalSettings.planForServices;
+        (data["qtyPerService"] ?? 1.0) * GlobalSettings.servicesTarget;
     double suggested = optimal - total;
     if (suggested < 0) suggested = 0;
 

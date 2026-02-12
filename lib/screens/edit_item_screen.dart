@@ -24,18 +24,17 @@ class _EditItemScreenState extends State<EditItemScreen> {
   final otherUnitController = TextEditingController();
 
   final List<String> unitOptions = [
+    'each',
     'case',
+    'box',
+    'carton',
     'dozen',
     'gallon',
-    'bottle',
-    'carton',
-    'box',
     'bag',
+    'bottle',
     'pack',
-    'container',
     'tray',
-    'each',
-    'Other...'
+    'other',
   ];
 
   @override
@@ -46,14 +45,14 @@ class _EditItemScreenState extends State<EditItemScreen> {
 
   void _loadItemData() {
     final data = widget.doc.data() as Map<String, dynamic>;
-    
+
     name.text = data["name"] ?? "";
     per.text = (data["qtyPerService"] ?? 0).toString();
     low.text = (data["gettingLow"] ?? 0).toString();
     purchase.text = (data["needToPurchase"] ?? 0).toString();
     model.text = data["model"] ?? "";
     selectedCategory = data["category"] ?? "food";
-    
+
     String unitType = data["unitType"] ?? "each";
     if (unitOptions.contains(unitType)) {
       selectedUnit = unitType;
@@ -107,7 +106,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
             _field("Item Name", name, false),
             _categoryDropdown(),
             _unitDropdown(),
-            if (showOtherUnit) _field("Custom Unit", otherUnitController, false),
+            if (showOtherUnit)
+              _field("Custom Unit", otherUnitController, false),
             _field("Used Each Service (QTY)", per, true),
             _field("Getting Low (QTY)", low, true),
             _field("Need to Purchase (QTY)", purchase, true),
@@ -117,8 +117,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
               onPressed: () async {
                 if (!_validateFields()) return;
 
-                String finalUnit = selectedUnit == "Other..." 
-                    ? otherUnitController.text 
+                String finalUnit = selectedUnit == "Other..."
+                    ? otherUnitController.text
                     : selectedUnit;
 
                 await service.updateItem(widget.doc.id, {
@@ -131,7 +131,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
                   "model": model.text,
                 });
 
-                Navigator.pop(context);
+                if (mounted) Navigator.pop(context);
               },
               child: const Text("Save Changes"),
             ),
@@ -158,11 +158,11 @@ class _EditItemScreenState extends State<EditItemScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: selectedCategory,
+        initialValue: selectedCategory,
         decoration: const InputDecoration(labelText: "Category"),
         items: const [
           DropdownMenuItem(value: "food", child: Text("Food")),
-          DropdownMenuItem(value: "service", child: Text("Service")),
+          DropdownMenuItem(value: "supplies", child: Text("Supplies")),
           DropdownMenuItem(value: "equipment", child: Text("Equipment")),
         ],
         onChanged: (value) {
@@ -178,13 +178,10 @@ class _EditItemScreenState extends State<EditItemScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: selectedUnit,
+        initialValue: selectedUnit,
         decoration: const InputDecoration(labelText: "Unit Type"),
         items: unitOptions.map((String unit) {
-          return DropdownMenuItem<String>(
-            value: unit,
-            child: Text(unit),
-          );
+          return DropdownMenuItem<String>(value: unit, child: Text(unit));
         }).toList(),
         onChanged: (value) {
           setState(() {

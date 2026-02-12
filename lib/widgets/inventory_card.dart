@@ -21,18 +21,22 @@ class InventoryCard extends StatelessWidget {
     String model = data["model"] ?? "";
 
     double total = truck + home;
-    double optimal = qtyPerService * GlobalSettings.planForServices;
+    double servicesRemaining = qtyPerService > 0 ? total / qtyPerService : 0;
 
     Color status = Colors.green;
 
-    if (total <= (data["needToPurchase"] ?? 0)) {
+    if (total <= (data["needToPurchase"] ?? 0) ||
+        servicesRemaining < GlobalSettings.servicesTarget) {
       status = Colors.red;
     } else if (total <= (data["gettingLow"] ?? 0)) {
       status = Colors.orange;
     }
 
-    String subtitle =
-        "Current: $total ($unitType)\nOptimal: $optimal ($unitType)";
+    String subtitle = "Current: $total ($unitType)";
+    if (qtyPerService > 0) {
+      subtitle +=
+          "\nServices Remaining: ${servicesRemaining.toStringAsFixed(1)}";
+    }
     if (model.isNotEmpty) {
       subtitle += "\nModel: $model";
     }
