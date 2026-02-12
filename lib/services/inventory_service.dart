@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class InventoryService {
   final _db = FirebaseFirestore.instance.collection("items");
+  final _settingsDb = FirebaseFirestore.instance.collection("app_settings");
 
   double snap(double value) {
     if (value < 0) return 0;
@@ -23,8 +24,8 @@ class InventoryService {
     double homeAdd = snap(total - truckAdd);
 
     await _db.doc(id).update({
-      "truckAmount": FieldValue.increment(truckAdd),
-      "homeAmount": FieldValue.increment(homeAdd),
+      "truckQuantity": FieldValue.increment(truckAdd),
+      "homeQuantity": FieldValue.increment(homeAdd),
       "updatedAt": FieldValue.serverTimestamp(),
       "updatedBy": FirebaseAuth.instance.currentUser?.email,
     });
@@ -58,11 +59,115 @@ class InventoryService {
     });
   }
 
-  Stream<QuerySnapshot> getItemsByFrequency(String checkFrequency) {
-    return _db.where("checkFrequency", isEqualTo: checkFrequency).snapshots();
+  Stream<QuerySnapshot> getItemsByFrequency(String frequency) {
+    return _db.where("inventoryFrequency", isEqualTo: frequency).snapshots();
   }
 
   Stream<QuerySnapshot> getAllItems() {
     return _db.snapshots();
+  }
+
+  /// Run one-time migration for all item documents.
+  /// Safe to call multiple times — checks a flag in app_settings.
+  Future<void> runMigration() async {
+    try {
+      final migrationDoc = await _settingsDb.doc("migration").get();
+      final migrationData = migrationDoc.data() ?? {};
+      if (migrationData["v2_completed"] == true) return;
+
+      final snapshot = await _db.get();
+      final batch = FirebaseFirestore.instance.batch();
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final updates = <String, dynamic>{};
+
+        // Rename truckAmount → truckQuantity
+        if (data.containsKey("truckAmount") &&
+            !data.containsKey("truckQuantity")) {
+          updates["truckQuantity"] = data["truckAmount"];
+          updates["truckAmount"] = FieldValue.delete();
+        }
+
+        // Rename homeAmount → homeQuantity
+        if (data.containsKey("homeAmount") &&
+            !data.containsKey("homeQuantity")) {
+          updates["homeQuantity"] = data["homeAmount"];
+          updates["homeAmount"] = FieldValue.delete();
+        }
+
+        // Rename qtyPerService → usedPerService
+        if (data.containsKey("qtyPerService") &&
+            !data.containsKey("usedPerService")) {
+          updates["usedPerService"] = data["qtyPerService"];
+          updates["qtyPerService"] = FieldValue.delete();
+        }
+
+        // Rename checkFrequency → inventoryFrequency
+        if (data.containsKey("checkFrequency") &&
+            !data.containsKey("inventoryFrequency")) {
+          String freq = data["checkFrequency"] ?? "perService";
+          if (freq == "service") freq = "perService";
+          updates["inventoryFrequency"] = freq;
+          updates["checkFrequency"] = FieldValue.delete();
+        }
+
+        // Migrate category "service" → "supplies"
+        if (data["category"] == "service") {
+          updates["category"] = "supplies";
+        }
+
+        // Migrate old quantity-based thresholds to service-based overrides
+        double usedPer =
+            (data["usedPerService"] ?? data["qtyPerService"] ?? 1.0).toDouble();
+        if (usedPer <= 0) usedPer = 1.0;
+
+        bool hasOldThresholds =
+            data.containsKey("gettingLow") ||
+            data.containsKey("needToPurchase") ||
+            data.containsKey("lowWarningServices");
+
+        if (hasOldThresholds && data["overrideWarnings"] != true) {
+          if (data.containsKey("lowWarningServices")) {
+            updates["overrideWarnings"] = true;
+            updates["gettingLowServices"] = data["lowWarningServices"];
+            updates["lowWarningServices"] = FieldValue.delete();
+          } else if (data.containsKey("gettingLow") &&
+              (data["gettingLow"] ?? 0) > 0) {
+            double lowQty = (data["gettingLow"] ?? 0).toDouble();
+            double critQty = (data["needToPurchase"] ?? 0).toDouble();
+            int lowServices = (lowQty / usedPer).ceil();
+            int critServices = (critQty / usedPer).ceil();
+            if (lowServices > 0 || critServices > 0) {
+              updates["overrideWarnings"] = true;
+              updates["gettingLowServices"] = lowServices;
+              updates["criticalServices"] = critServices;
+            }
+          }
+          // Clean up old fields
+          updates["gettingLow"] = FieldValue.delete();
+          updates["needToPurchase"] = FieldValue.delete();
+        }
+
+        // Clean up removed fields
+        if (data.containsKey("required")) {
+          updates["required"] = FieldValue.delete();
+        }
+
+        if (updates.isNotEmpty) {
+          batch.update(doc.reference, updates);
+        }
+      }
+
+      await batch.commit();
+
+      // Mark migration complete
+      await _settingsDb.doc("migration").set({
+        "v2_completed": true,
+        "v2_completedAt": FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print("Migration error (non-blocking): $e");
+    }
   }
 }

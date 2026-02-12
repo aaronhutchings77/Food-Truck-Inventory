@@ -13,17 +13,22 @@ class EditItemScreen extends StatefulWidget {
 class _EditItemScreenState extends State<EditItemScreen> {
   final service = InventoryService();
 
-  final name = TextEditingController();
-  final per = TextEditingController();
-  final low = TextEditingController();
-  final purchase = TextEditingController();
-  final model = TextEditingController();
+  final nameCtl = TextEditingController();
+  final usedPerServiceCtl = TextEditingController();
+  final truckQtyCtl = TextEditingController();
+  final homeQtyCtl = TextEditingController();
+  final modelCtl = TextEditingController();
+  final otherUnitCtl = TextEditingController();
+  final gettingLowServicesCtl = TextEditingController();
+  final criticalServicesCtl = TextEditingController();
+  final overrideTruckTargetCtl = TextEditingController();
+
   String selectedCategory = "food";
+  String selectedFrequency = "perService";
   String selectedUnit = "each";
-  String selectedCheckFrequency = "service";
-  bool isRequired = false;
   bool showOtherUnit = false;
-  final otherUnitController = TextEditingController();
+  bool overrideWarnings = false;
+  bool overrideTruckTarget = false;
 
   final List<String> unitOptions = [
     'each',
@@ -45,103 +50,102 @@ class _EditItemScreenState extends State<EditItemScreen> {
     _loadItemData();
   }
 
+  @override
+  void dispose() {
+    nameCtl.dispose();
+    usedPerServiceCtl.dispose();
+    truckQtyCtl.dispose();
+    homeQtyCtl.dispose();
+    modelCtl.dispose();
+    otherUnitCtl.dispose();
+    gettingLowServicesCtl.dispose();
+    criticalServicesCtl.dispose();
+    overrideTruckTargetCtl.dispose();
+    super.dispose();
+  }
+
   void _loadItemData() {
     final data = widget.doc.data() as Map<String, dynamic>;
 
-    name.text = data["name"] ?? "";
-    per.text = (data["qtyPerService"] ?? 0).toString();
-    low.text = (data["gettingLow"] ?? 0).toString();
-    purchase.text = (data["needToPurchase"] ?? 0).toString();
-    model.text = data["model"] ?? "";
+    nameCtl.text = data["name"] ?? "";
+    usedPerServiceCtl.text =
+        (data["usedPerService"] ?? data["qtyPerService"] ?? 0).toString();
+    truckQtyCtl.text = (data["truckQuantity"] ?? data["truckAmount"] ?? 0)
+        .toString();
+    homeQtyCtl.text = (data["homeQuantity"] ?? data["homeAmount"] ?? 0)
+        .toString();
+    modelCtl.text = data["model"] ?? "";
+
     selectedCategory = data["category"] ?? "food";
-    selectedCheckFrequency = data["checkFrequency"] ?? "service";
-    isRequired = data["required"] ?? false;
+    if (selectedCategory == "service") selectedCategory = "supplies";
+
+    String freq =
+        data["inventoryFrequency"] ?? data["checkFrequency"] ?? "perService";
+    if (freq == "service") freq = "perService";
+    selectedFrequency = freq;
+
+    overrideWarnings = data["overrideWarnings"] ?? false;
+    gettingLowServicesCtl.text = (data["gettingLowServices"] ?? 0).toString();
+    criticalServicesCtl.text = (data["criticalServices"] ?? 0).toString();
+
+    overrideTruckTarget = data["overrideTruckTargetServices"] != null;
+    if (overrideTruckTarget) {
+      overrideTruckTargetCtl.text = data["overrideTruckTargetServices"]
+          .toString();
+    }
 
     String unitType = data["unitType"] ?? "each";
     if (unitOptions.contains(unitType)) {
       selectedUnit = unitType;
       showOtherUnit = false;
     } else {
-      selectedUnit = "Other...";
+      selectedUnit = "other";
       showOtherUnit = true;
-      otherUnitController.text = unitType;
+      otherUnitCtl.text = unitType;
     }
-  }
-
-  bool _validateFields() {
-    try {
-      double perValue = double.parse(per.text);
-      double lowValue = double.parse(low.text);
-      double purchaseValue = double.parse(purchase.text);
-
-      if (perValue < 0) {
-        _showError("Qty per service must be ≥ 0");
-        return false;
-      }
-      if (purchaseValue < 0) {
-        _showError("Need to Purchase must be ≥ 0");
-        return false;
-      }
-      if (lowValue < purchaseValue) {
-        _showError("Getting Low must be ≥ Need to Purchase");
-        return false;
-      }
-      return true;
-    } catch (e) {
-      _showError("Please enter valid numbers for quantity fields");
-      return false;
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Edit Item")),
+      appBar: AppBar(
+        title: const Text(
+          "Edit Item",
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListView(
           children: [
-            _field("Item Name", name, false),
+            _field("Item Name", nameCtl, false),
             _categoryDropdown(),
-            _checkFrequencyDropdown(),
-            _requiredCheckbox(),
+            _frequencyDropdown(),
             _unitDropdown(),
-            if (showOtherUnit)
-              _field("Custom Unit", otherUnitController, false),
-            _field("Used Each Service (QTY)", per, true),
-            _field("Getting Low (QTY)", low, true),
-            _field("Need to Purchase (QTY)", purchase, true),
-            _field("Model / SKU (Optional)", model, false),
+            if (showOtherUnit) _field("Custom Unit", otherUnitCtl, false),
+            _field("Used Per Service", usedPerServiceCtl, true),
+            _field("Truck Quantity", truckQtyCtl, true),
+            _field("Home Quantity", homeQtyCtl, true),
+            _field("Model / SKU (Optional)", modelCtl, false),
+            const SizedBox(height: 16),
+            const Divider(),
+            _overrideTruckTargetCheckbox(),
+            if (overrideTruckTarget)
+              _field("Truck Target (services)", overrideTruckTargetCtl, true),
+            const SizedBox(height: 8),
+            const Divider(),
+            _overrideCheckbox(),
+            if (overrideWarnings) ...[
+              _field("Getting Low (services)", gettingLowServicesCtl, true),
+              _field("Need to Purchase (services)", criticalServicesCtl, true),
+            ],
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () async {
-                if (!_validateFields()) return;
-
-                String finalUnit = selectedUnit == "Other..."
-                    ? otherUnitController.text
-                    : selectedUnit;
-
-                await service.updateItem(widget.doc.id, {
-                  "name": name.text,
-                  "category": selectedCategory,
-                  "checkFrequency": selectedCheckFrequency,
-                  "required": isRequired,
-                  "qtyPerService": double.parse(per.text),
-                  "gettingLow": double.parse(low.text),
-                  "needToPurchase": double.parse(purchase.text),
-                  "unitType": finalUnit,
-                  "model": model.text,
-                });
-
-                if (mounted) Navigator.pop(context);
-              },
-              child: const Text("Save Changes"),
+              onPressed: _save,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              child: const Text("Save Changes", style: TextStyle(fontSize: 18)),
             ),
           ],
         ),
@@ -149,12 +153,72 @@ class _EditItemScreenState extends State<EditItemScreen> {
     );
   }
 
+  Future<void> _save() async {
+    if (nameCtl.text.trim().isEmpty) {
+      _showError("Item name is required");
+      return;
+    }
+
+    final usedPer = double.tryParse(usedPerServiceCtl.text);
+    if (usedPer == null || usedPer < 0) {
+      _showError("Used Per Service must be a valid number >= 0");
+      return;
+    }
+
+    final truckQty = double.tryParse(truckQtyCtl.text) ?? 0.0;
+    final homeQty = double.tryParse(homeQtyCtl.text) ?? 0.0;
+
+    String finalUnit = selectedUnit == "other"
+        ? otherUnitCtl.text.trim()
+        : selectedUnit;
+    if (finalUnit.isEmpty) finalUnit = "each";
+
+    final updates = <String, dynamic>{
+      "name": nameCtl.text.trim(),
+      "category": selectedCategory,
+      "inventoryFrequency": selectedFrequency,
+      "usedPerService": usedPer,
+      "truckQuantity": truckQty,
+      "homeQuantity": homeQty,
+      "unitType": finalUnit,
+      "model": modelCtl.text.trim(),
+      "overrideWarnings": overrideWarnings,
+    };
+
+    if (overrideWarnings) {
+      updates["gettingLowServices"] =
+          int.tryParse(gettingLowServicesCtl.text) ?? 0;
+      updates["criticalServices"] = int.tryParse(criticalServicesCtl.text) ?? 0;
+    }
+
+    if (overrideTruckTarget) {
+      final val = int.tryParse(overrideTruckTargetCtl.text);
+      if (val != null && val > 0) {
+        updates["overrideTruckTargetServices"] = val;
+      } else {
+        updates["overrideTruckTargetServices"] = FieldValue.delete();
+      }
+    } else {
+      updates["overrideTruckTargetServices"] = FieldValue.delete();
+    }
+
+    await service.updateItem(widget.doc.id, updates);
+    if (mounted) Navigator.pop(context);
+  }
+
   Widget _field(String label, TextEditingController controller, bool numeric) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: controller,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        style: const TextStyle(fontSize: 16),
         keyboardType: numeric
             ? const TextInputType.numberWithOptions(decimal: true)
             : TextInputType.text,
@@ -164,54 +228,79 @@ class _EditItemScreenState extends State<EditItemScreen> {
 
   Widget _categoryDropdown() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
         initialValue: selectedCategory,
-        decoration: const InputDecoration(labelText: "Category"),
+        decoration: const InputDecoration(
+          labelText: "Category",
+          labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
         items: const [
           DropdownMenuItem(value: "food", child: Text("Food")),
           DropdownMenuItem(value: "supplies", child: Text("Supplies")),
           DropdownMenuItem(value: "equipment", child: Text("Equipment")),
         ],
-        onChanged: (value) {
-          setState(() {
-            selectedCategory = value!;
-          });
-        },
+        onChanged: (value) => setState(() => selectedCategory = value!),
       ),
     );
   }
 
-  Widget _checkFrequencyDropdown() {
+  Widget _frequencyDropdown() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: DropdownButtonFormField<String>(
-        initialValue: selectedCheckFrequency,
-        decoration: const InputDecoration(labelText: "Check Frequency"),
+        initialValue: selectedFrequency,
+        decoration: const InputDecoration(
+          labelText: "Inventory Frequency",
+          labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
         items: const [
-          DropdownMenuItem(value: "service", child: Text("Service")),
+          DropdownMenuItem(value: "perService", child: Text("Per Service")),
+          DropdownMenuItem(value: "daily", child: Text("Daily")),
           DropdownMenuItem(value: "weekly", child: Text("Weekly")),
           DropdownMenuItem(value: "monthly", child: Text("Monthly")),
           DropdownMenuItem(value: "quarterly", child: Text("Quarterly")),
         ],
+        onChanged: (value) => setState(() => selectedFrequency = value!),
+      ),
+    );
+  }
+
+  Widget _unitDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DropdownButtonFormField<String>(
+        initialValue: selectedUnit,
+        decoration: const InputDecoration(
+          labelText: "Unit Type",
+          labelStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        items: unitOptions.map((String unit) {
+          return DropdownMenuItem<String>(value: unit, child: Text(unit));
+        }).toList(),
         onChanged: (value) {
           setState(() {
-            selectedCheckFrequency = value!;
+            selectedUnit = value!;
+            showOtherUnit = (value == "other");
           });
         },
       ),
     );
   }
 
-  Widget _requiredCheckbox() {
+  Widget _overrideCheckbox() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: CheckboxListTile(
-        title: const Text("Required Item"),
-        value: isRequired,
+        title: const Text(
+          "Override Default Warnings",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        subtitle: const Text("Set custom warning thresholds for this item"),
+        value: overrideWarnings,
         onChanged: (value) {
           setState(() {
-            isRequired = value ?? false;
+            overrideWarnings = value ?? false;
           });
         },
         controlAffinity: ListTileControlAffinity.leading,
@@ -220,22 +309,30 @@ class _EditItemScreenState extends State<EditItemScreen> {
     );
   }
 
-  Widget _unitDropdown() {
+  Widget _overrideTruckTargetCheckbox() {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DropdownButtonFormField<String>(
-        initialValue: selectedUnit,
-        decoration: const InputDecoration(labelText: "Unit Type"),
-        items: unitOptions.map((String unit) {
-          return DropdownMenuItem<String>(value: unit, child: Text(unit));
-        }).toList(),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: CheckboxListTile(
+        title: const Text(
+          "Override Truck Target",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        subtitle: const Text("Set a custom truck target for this item"),
+        value: overrideTruckTarget,
         onChanged: (value) {
           setState(() {
-            selectedUnit = value!;
-            showOtherUnit = (value == "Other...");
+            overrideTruckTarget = value ?? false;
           });
         },
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
       ),
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 }

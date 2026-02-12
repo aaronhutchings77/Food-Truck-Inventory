@@ -14,11 +14,6 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<QueryDocumentSnapshot> _allDocs = [];
   List<QueryDocumentSnapshot> _filteredDocs = [];
-  final Map<String, bool> _expandedCategories = {
-    "food": true,
-    "supplies": true,
-    "equipment": true,
-  };
 
   @override
   void initState() {
@@ -55,26 +50,27 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        StreamBuilder<int>(
-          stream: GlobalSettings.servicesTargetStream,
+        // Header with target info
+        StreamBuilder<Map<String, int>>(
+          stream: GlobalSettings.settingsStream,
           builder: (context, snapshot) {
-            final target = snapshot.data ?? 5;
+            final settings = snapshot.data ?? {};
+            final target =
+                settings["targetServices"] ?? GlobalSettings.targetServices;
+
+            if (snapshot.hasData) GlobalSettings.initialize(snapshot.data!);
+
             return Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               color: Colors.blue.shade50,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Target Services: $target",
+                    "Shopping for $target overall services",
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () => _editTargetDialog(context, target),
                   ),
                 ],
               ),
@@ -105,30 +101,31 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                   ? _allDocs
                   : _filteredDocs;
 
-              // Filter items that need restocking
-              final needsRestock = docsToUse.where((doc) {
+              // Shopping list: items where requiredQuantity > 0
+              final needsShopping = docsToUse.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
-                double total =
-                    (data["truckAmount"] ?? 0.0) + (data["homeAmount"] ?? 0.0);
-                return total <= (data["gettingLow"] ?? 0);
+                return ShoppingCard.getRequiredQuantity(data) > 0;
               }).toList();
 
-              if (needsRestock.isEmpty) {
-                return const Center(child: Text("Nothing needs restocking."));
+              if (needsShopping.isEmpty) {
+                return const Center(
+                  child: Text("Fully stocked!", style: TextStyle(fontSize: 18)),
+                );
               }
 
-              // Group by category
-              final foodItems = needsRestock.where((doc) {
+              // Group by category (no "service" category)
+              final foodItems = needsShopping.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 return (data["category"] ?? "food") == "food";
               }).toList();
 
-              final suppliesItems = needsRestock.where((doc) {
+              final suppliesItems = needsShopping.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
-                return (data["category"] ?? "food") == "supplies";
+                final cat = data["category"] ?? "food";
+                return cat == "supplies" || cat == "service";
               }).toList();
 
-              final equipmentItems = needsRestock.where((doc) {
+              final equipmentItems = needsShopping.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 return (data["category"] ?? "food") == "equipment";
               }).toList();
@@ -153,46 +150,12 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
     return Card(
       margin: const EdgeInsets.all(8),
       child: ExpansionTile(
-        title: Text(title),
-        initiallyExpanded: _expandedCategories[title.toLowerCase()] ?? true,
-        onExpansionChanged: (expanded) {
-          setState(() {
-            _expandedCategories[title.toLowerCase()] = expanded;
-          });
-        },
-        children: docs.map((doc) => ShoppingCard(doc: doc)).toList(),
-      ),
-    );
-  }
-
-  void _editTargetDialog(BuildContext context, int currentTarget) {
-    final controller = TextEditingController(text: currentTarget.toString());
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Edit Target Services"),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: "Target Services"),
-          keyboardType: TextInputType.number,
+        title: Text(
+          "$title (${docs.length})",
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              final newTarget = int.tryParse(controller.text);
-              if (newTarget != null && newTarget > 0) {
-                await GlobalSettings.updateServicesTarget(newTarget);
-                if (mounted) Navigator.pop(context);
-              }
-            },
-            child: const Text("Save"),
-          ),
-        ],
+        initiallyExpanded: false,
+        children: docs.map((doc) => ShoppingCard(doc: doc)).toList(),
       ),
     );
   }

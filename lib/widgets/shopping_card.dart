@@ -9,36 +9,72 @@ class ShoppingCard extends StatelessWidget {
 
   final service = InventoryService();
 
+  /// Calculate required purchase quantity based on overall target.
+  /// buyAmount = overallRequired - totalAvailable
+  static double getRequiredQuantity(Map<String, dynamic> data) {
+    double usedPer = (data["usedPerService"] ?? data["qtyPerService"] ?? 0.0)
+        .toDouble();
+    double truck = (data["truckQuantity"] ?? data["truckAmount"] ?? 0.0)
+        .toDouble();
+    double home = (data["homeQuantity"] ?? data["homeAmount"] ?? 0.0)
+        .toDouble();
+    double totalAvailable = truck + home;
+    double overallRequired = usedPer * GlobalSettings.targetServices;
+    double needed = overallRequired - totalAvailable;
+    return needed > 0 ? needed : 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = doc.data() as Map<String, dynamic>;
 
-    double total = (data["truckAmount"] ?? 0.0) + (data["homeAmount"] ?? 0.0);
+    double requiredQty = getRequiredQuantity(data);
     String unitType = data["unitType"] ?? "units";
-    double optimal =
-        (data["qtyPerService"] ?? 1.0) * GlobalSettings.servicesTarget;
-    double suggested = optimal - total;
-    if (suggested < 0) suggested = 0;
+    double truck = (data["truckQuantity"] ?? data["truckAmount"] ?? 0.0)
+        .toDouble();
+    double home = (data["homeQuantity"] ?? data["homeAmount"] ?? 0.0)
+        .toDouble();
+    double total = truck + home;
 
-    return Card(
-      margin: const EdgeInsets.all(8),
-      child: ListTile(
-        title: Text(data["name"]),
-        subtitle: Text(
-          "Suggested: ${suggested.toStringAsFixed(1)} ($unitType)",
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton(
-              child: const Text("Purchase"),
-              onPressed: () => _purchaseDialog(context, suggested),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _deleteConfirmation(context),
-            ),
-          ],
+    return Dismissible(
+      key: Key(doc.id),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) async {
+        await _confirmDelete(context);
+        return false; // Don't dismiss, let the delete button handle it
+      },
+      background: Container(
+        color: Colors.red,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete, color: Colors.white, size: 28),
+      ),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: ListTile(
+          title: Text(
+            data["name"] ?? "",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(
+            "Need: ${requiredQty.toStringAsFixed(1)} $unitType\n"
+            "On Hand: ${total.toStringAsFixed(1)} $unitType",
+            style: const TextStyle(fontSize: 14),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                onPressed: () => _purchaseDialog(context, requiredQty),
+                child: const Text("Purchase", style: TextStyle(fontSize: 14)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, size: 20, color: Colors.red),
+                tooltip: "Delete Item",
+                onPressed: () => _confirmDelete(context),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -48,64 +84,83 @@ class ShoppingCard extends StatelessWidget {
     final totalController = TextEditingController(
       text: suggested.toStringAsFixed(1),
     );
-    final truckController = TextEditingController(text: "0");
+    String placement = "truck";
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Add Purchase"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: totalController,
-              decoration: const InputDecoration(labelText: "Total Bought"),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Add Purchase"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: totalController,
+                decoration: const InputDecoration(labelText: "Total Bought"),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Where was item placed?",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(
+                    value: "truck",
+                    label: Text("Truck"),
+                    icon: Icon(Icons.local_shipping),
+                  ),
+                  ButtonSegment(
+                    value: "home",
+                    label: Text("Home"),
+                    icon: Icon(Icons.home),
+                  ),
+                ],
+                selected: {placement},
+                onSelectionChanged: (v) =>
+                    setDialogState(() => placement = v.first),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
             ),
-            TextField(
-              controller: truckController,
-              decoration: const InputDecoration(labelText: "Add To Truck"),
+            TextButton(
+              onPressed: () async {
+                final total = double.tryParse(totalController.text) ?? 0;
+                final truckAdd = placement == "truck" ? total : 0.0;
+                await service.addPurchase(doc.id, total, truckAdd);
+                if (context.mounted) Navigator.pop(context);
+              },
+              child: const Text("Save"),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await service.addPurchase(
-                doc.id,
-                double.tryParse(totalController.text) ?? 0,
-                double.tryParse(truckController.text) ?? 0,
-              );
-              if (context.mounted) {
-                Navigator.pop(context);
-              }
-            },
-            child: const Text("Save"),
-          ),
-        ],
       ),
     );
   }
 
-  void _deleteConfirmation(BuildContext context) {
-    final data = doc.data() as Map<String, dynamic>;
-    showDialog(
+  Future<void> _confirmDelete(BuildContext context) async {
+    await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Delete Item"),
-        content: Text(
-          "Are you sure you want to delete \"${data["name"]}\"? This action cannot be undone.",
-        ),
+        title: const Text("Delete Item?"),
+        content: const Text("This cannot be undone."),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text("Cancel"),
           ),
           TextButton(
             onPressed: () async {
               await service.deleteItem(doc.id);
-              if (context.mounted) {
-                Navigator.pop(context);
-              }
+              if (context.mounted) Navigator.pop(context, true);
             },
             child: const Text("Delete", style: TextStyle(color: Colors.red)),
           ),

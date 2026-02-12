@@ -17,23 +17,21 @@ class _InventoryScreenState extends State<InventoryScreen>
   final TextEditingController _searchController = TextEditingController();
   final InventoryService _service = InventoryService();
   final List<String> _tabs = [
-    "Service",
+    "Per Service",
+    "Daily",
     "Weekly",
     "Monthly",
     "Quarterly",
-    "Getting Low",
+    "Warnings",
     "All",
   ];
 
-  // Track collapsed state by category for each tab
   final Map<String, Set<String>> _collapsedCategories = {};
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
-    // Initialize collapsed categories for Service tab (default collapsed)
-    _collapsedCategories["service"] = {"food", "supplies", "equipment"};
   }
 
   @override
@@ -58,15 +56,17 @@ class _InventoryScreenState extends State<InventoryScreen>
     return _collapsedCategories[tabKey]?.contains(category) ?? false;
   }
 
-  static bool isOverdue(String checkFrequency, Timestamp? lastCheckedAt) {
+  static bool isOverdue(String frequency, Timestamp? lastCheckedAt) {
     if (lastCheckedAt == null) return true;
 
     final lastChecked = lastCheckedAt.toDate();
     final now = DateTime.now();
     final difference = now.difference(lastChecked);
 
-    switch (checkFrequency) {
-      case "service":
+    switch (frequency) {
+      case "perService":
+        return difference.inDays >= 1;
+      case "daily":
         return difference.inDays >= 1;
       case "weekly":
         return difference.inDays >= 7;
@@ -83,26 +83,61 @@ class _InventoryScreenState extends State<InventoryScreen>
   Widget build(BuildContext context) {
     return Column(
       children: [
-        StreamBuilder<int>(
-          stream: GlobalSettings.servicesTargetStream,
+        // Global settings header
+        StreamBuilder<Map<String, int>>(
+          stream: GlobalSettings.settingsStream,
           builder: (context, snapshot) {
-            final target = snapshot.data ?? 5;
+            final settings = snapshot.data ?? {};
+            final target =
+                settings["targetServices"] ?? GlobalSettings.targetServices;
+            final low =
+                settings["lowServiceMultiplier"] ??
+                GlobalSettings.lowServiceMultiplier;
+            final crit =
+                settings["criticalServiceMultiplier"] ??
+                GlobalSettings.criticalServiceMultiplier;
+
+            // Update cache
+            if (snapshot.hasData) GlobalSettings.initialize(snapshot.data!);
+
             return Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               color: Colors.blue.shade50,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Target Services: $target",
+                    "Inventory Levels (QTY of Services)",
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () => _editTargetDialog(context, target),
+                  const SizedBox(height: 8),
+                  Text(
+                    "Overall Target: $target",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Getting Low: $low",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.orange.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Need to Purchase: $crit",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.red.shade700,
+                    ),
                   ),
                 ],
               ),
@@ -112,6 +147,11 @@ class _InventoryScreenState extends State<InventoryScreen>
         TabBar(
           controller: _tabController,
           isScrollable: true,
+          labelStyle: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: const TextStyle(fontSize: 14),
           tabs: _tabs.map((t) => Tab(text: t)).toList(),
         ),
         Padding(
@@ -130,11 +170,12 @@ class _InventoryScreenState extends State<InventoryScreen>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _frequencyTab("service"),
+              _frequencyTab("perService"),
+              _frequencyTab("daily"),
               _frequencyTab("weekly"),
               _frequencyTab("monthly"),
               _frequencyTab("quarterly"),
-              _gettingLowTab(),
+              _warningsTab(),
               _allItemsTab(),
             ],
           ),
@@ -144,8 +185,8 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _frequencyTab(String frequency) {
-    // For "service" tab, also include items without checkFrequency (legacy items)
-    if (frequency == "service") {
+    // For perService, also include legacy items without inventoryFrequency
+    if (frequency == "perService") {
       return StreamBuilder<QuerySnapshot>(
         stream: _service.getAllItems(),
         builder: (context, snapshot) {
@@ -155,9 +196,8 @@ class _InventoryScreenState extends State<InventoryScreen>
 
           final docs = _filterBySearch(snapshot.data!.docs).where((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            final checkFreq = data["checkFrequency"] as String?;
-            // Include items with "service" OR items without checkFrequency field
-            return checkFreq == "service" || checkFreq == null;
+            final freq = data["inventoryFrequency"] ?? data["checkFrequency"];
+            return freq == "perService" || freq == "service" || freq == null;
           }).toList();
 
           return _buildCategoryGroupedList(docs, frequency);
@@ -178,7 +218,7 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
   }
 
-  Widget _gettingLowTab() {
+  Widget _warningsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: _service.getAllItems(),
       builder: (context, snapshot) {
@@ -188,28 +228,19 @@ class _InventoryScreenState extends State<InventoryScreen>
 
         final docs = _filterBySearch(snapshot.data!.docs).where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          double total =
-              (data["truckAmount"] ?? 0.0) + (data["homeAmount"] ?? 0.0);
-          double qtyPerService = data["qtyPerService"] ?? 1.0;
-          double servicesRemaining = qtyPerService > 0
-              ? total / qtyPerService
-              : 0;
-
-          return total <= (data["gettingLow"] ?? 0) ||
-              total <= (data["needToPurchase"] ?? 0) ||
-              servicesRemaining < GlobalSettings.servicesTarget;
+          return InventoryCard.isWarning(data);
         }).toList();
 
         if (docs.isEmpty) {
           return const Center(
             child: Text(
-              "No items are getting low",
+              "No items in warning state",
               style: TextStyle(fontSize: 16),
             ),
           );
         }
 
-        return _buildCategoryGroupedList(docs, "gettingLow");
+        return _buildCategoryGroupedList(docs, "warnings");
       },
     );
   }
@@ -258,6 +289,7 @@ class _InventoryScreenState extends State<InventoryScreen>
     for (var doc in docs) {
       final data = doc.data() as Map<String, dynamic>;
       String category = data["category"] ?? "food";
+      if (category == "service") category = "supplies";
       if (grouped.containsKey(category)) {
         grouped[category]!.add(doc);
       } else {
@@ -334,42 +366,11 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   bool _checkIfOverdue(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    final checkFrequency = data["checkFrequency"] as String?;
+    final frequency =
+        (data["inventoryFrequency"] ?? data["checkFrequency"]) as String?;
     final lastCheckedAt = data["lastCheckedAt"] as Timestamp?;
 
-    if (checkFrequency == null) return false;
-    return isOverdue(checkFrequency, lastCheckedAt);
-  }
-
-  void _editTargetDialog(BuildContext context, int currentTarget) {
-    final controller = TextEditingController(text: currentTarget.toString());
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Edit Target Services"),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(labelText: "Target Services"),
-          keyboardType: TextInputType.number,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              final newTarget = int.tryParse(controller.text);
-              if (newTarget != null && newTarget > 0) {
-                await GlobalSettings.updateServicesTarget(newTarget);
-                if (mounted) Navigator.pop(context);
-              }
-            },
-            child: const Text("Save"),
-          ),
-        ],
-      ),
-    );
+    if (frequency == null) return false;
+    return isOverdue(frequency, lastCheckedAt);
   }
 }
