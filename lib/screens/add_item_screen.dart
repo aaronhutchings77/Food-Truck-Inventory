@@ -18,6 +18,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final model = TextEditingController();
   String selectedCategory = "food";
   String selectedUnit = "each";
+  String selectedCheckFrequency = "service";
+  bool isRequired = false;
   bool showOtherUnit = false;
   final otherUnitController = TextEditingController();
 
@@ -45,6 +47,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
           children: [
             _field("Item Name", name, false),
             _categoryDropdown(),
+            _checkFrequencyDropdown(),
+            _requiredCheckbox(),
             _unitDropdown(),
             if (showOtherUnit)
               _field("Custom Unit", otherUnitController, false),
@@ -64,6 +68,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
                 await service.addItem({
                   "name": name.text,
                   "category": selectedCategory,
+                  "checkFrequency": selectedCheckFrequency,
+                  "required": isRequired,
                   "qtyPerService": double.parse(per.text),
                   "truckAmount": 0.0,
                   "homeAmount": 0.0,
@@ -112,6 +118,44 @@ class _AddItemScreenState extends State<AddItemScreen> {
             selectedCategory = value!;
           });
         },
+      ),
+    );
+  }
+
+  Widget _checkFrequencyDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        initialValue: selectedCheckFrequency,
+        decoration: const InputDecoration(labelText: "Check Frequency"),
+        items: const [
+          DropdownMenuItem(value: "service", child: Text("Service")),
+          DropdownMenuItem(value: "weekly", child: Text("Weekly")),
+          DropdownMenuItem(value: "monthly", child: Text("Monthly")),
+          DropdownMenuItem(value: "quarterly", child: Text("Quarterly")),
+        ],
+        onChanged: (value) {
+          setState(() {
+            selectedCheckFrequency = value!;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _requiredCheckbox() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: CheckboxListTile(
+        title: const Text("Required Item"),
+        value: isRequired,
+        onChanged: (value) {
+          setState(() {
+            isRequired = value ?? false;
+          });
+        },
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
       ),
     );
   }

@@ -20,6 +20,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
   final model = TextEditingController();
   String selectedCategory = "food";
   String selectedUnit = "each";
+  String selectedCheckFrequency = "service";
+  bool isRequired = false;
   bool showOtherUnit = false;
   final otherUnitController = TextEditingController();
 
@@ -52,6 +54,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
     purchase.text = (data["needToPurchase"] ?? 0).toString();
     model.text = data["model"] ?? "";
     selectedCategory = data["category"] ?? "food";
+    selectedCheckFrequency = data["checkFrequency"] ?? "service";
+    isRequired = data["required"] ?? false;
 
     String unitType = data["unitType"] ?? "each";
     if (unitOptions.contains(unitType)) {
@@ -105,6 +109,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
           children: [
             _field("Item Name", name, false),
             _categoryDropdown(),
+            _checkFrequencyDropdown(),
+            _requiredCheckbox(),
             _unitDropdown(),
             if (showOtherUnit)
               _field("Custom Unit", otherUnitController, false),
@@ -124,6 +130,8 @@ class _EditItemScreenState extends State<EditItemScreen> {
                 await service.updateItem(widget.doc.id, {
                   "name": name.text,
                   "category": selectedCategory,
+                  "checkFrequency": selectedCheckFrequency,
+                  "required": isRequired,
                   "qtyPerService": double.parse(per.text),
                   "gettingLow": double.parse(low.text),
                   "needToPurchase": double.parse(purchase.text),
@@ -170,6 +178,44 @@ class _EditItemScreenState extends State<EditItemScreen> {
             selectedCategory = value!;
           });
         },
+      ),
+    );
+  }
+
+  Widget _checkFrequencyDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        initialValue: selectedCheckFrequency,
+        decoration: const InputDecoration(labelText: "Check Frequency"),
+        items: const [
+          DropdownMenuItem(value: "service", child: Text("Service")),
+          DropdownMenuItem(value: "weekly", child: Text("Weekly")),
+          DropdownMenuItem(value: "monthly", child: Text("Monthly")),
+          DropdownMenuItem(value: "quarterly", child: Text("Quarterly")),
+        ],
+        onChanged: (value) {
+          setState(() {
+            selectedCheckFrequency = value!;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _requiredCheckbox() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: CheckboxListTile(
+        title: const Text("Required Item"),
+        value: isRequired,
+        onChanged: (value) {
+          setState(() {
+            isRequired = value ?? false;
+          });
+        },
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
       ),
     );
   }

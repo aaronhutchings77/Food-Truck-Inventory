@@ -49,4 +49,20 @@ class InventoryService {
   Future<void> deleteItem(String id) async {
     await _db.doc(id).delete();
   }
+
+  Future<void> markAsChecked(String id) async {
+    await _db.doc(id).update({
+      "lastCheckedAt": FieldValue.serverTimestamp(),
+      "updatedAt": FieldValue.serverTimestamp(),
+      "updatedBy": FirebaseAuth.instance.currentUser?.email,
+    });
+  }
+
+  Stream<QuerySnapshot> getItemsByFrequency(String checkFrequency) {
+    return _db.where("checkFrequency", isEqualTo: checkFrequency).snapshots();
+  }
+
+  Stream<QuerySnapshot> getAllItems() {
+    return _db.snapshots();
+  }
 }

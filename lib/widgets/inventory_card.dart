@@ -6,7 +6,15 @@ import '../screens/edit_item_screen.dart';
 
 class InventoryCard extends StatelessWidget {
   final QueryDocumentSnapshot doc;
-  InventoryCard({super.key, required this.doc});
+  final bool showCheckButton;
+  final bool isOverdue;
+
+  InventoryCard({
+    super.key,
+    required this.doc,
+    this.showCheckButton = false,
+    this.isOverdue = false,
+  });
 
   final service = InventoryService();
 
@@ -42,8 +50,14 @@ class InventoryCard extends StatelessWidget {
     }
 
     return Card(
-      color: status.withOpacity(0.1),
+      color: status.withValues(alpha: 0.1),
       margin: const EdgeInsets.all(8),
+      shape: isOverdue
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+              side: const BorderSide(color: Colors.blue, width: 3),
+            )
+          : null,
       child: InkWell(
         onTap: () {
           Navigator.push(
@@ -57,6 +71,15 @@ class InventoryCard extends StatelessWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (showCheckButton)
+                IconButton(
+                  icon: Icon(
+                    Icons.check_circle_outline,
+                    color: isOverdue ? Colors.blue : Colors.green,
+                  ),
+                  tooltip: "Mark as Checked",
+                  onPressed: () => _markAsChecked(context),
+                ),
               IconButton(
                 icon: const Icon(Icons.edit),
                 onPressed: () {
@@ -77,6 +100,18 @@ class InventoryCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _markAsChecked(BuildContext context) async {
+    await service.markAsChecked(doc.id);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Item marked as checked"),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   void _deleteConfirmation(BuildContext context) {
