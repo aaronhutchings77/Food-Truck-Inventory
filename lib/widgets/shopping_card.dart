@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/inventory_service.dart';
+import '../widgets/inventory_card.dart';
 import '../settings/global_settings.dart';
 
 class ShoppingCard extends StatelessWidget {
@@ -24,6 +25,48 @@ class ShoppingCard extends StatelessWidget {
     return needed > 0 ? needed : 0;
   }
 
+  /// Determine if an item is critical (needs to buy now)
+  static bool isCritical(Map<String, dynamic> data) {
+    final servicesRemaining = InventoryCard.getServicesRemaining(data);
+
+    bool override = data["overrideWarnings"] == true;
+    int critThreshold;
+
+    if (override) {
+      critThreshold =
+          (data["criticalServices"] ?? GlobalSettings.criticalServiceMultiplier)
+              as int;
+    } else {
+      critThreshold = GlobalSettings.criticalServiceMultiplier;
+    }
+
+    return servicesRemaining <= critThreshold;
+  }
+
+  /// Determine if an item is getting low
+  static bool isGettingLow(Map<String, dynamic> data) {
+    final servicesRemaining = InventoryCard.getServicesRemaining(data);
+
+    bool override = data["overrideWarnings"] == true;
+    int lowThreshold;
+    int critThreshold;
+
+    if (override) {
+      lowThreshold =
+          (data["gettingLowServices"] ?? GlobalSettings.lowServiceMultiplier)
+              as int;
+      critThreshold =
+          (data["criticalServices"] ?? GlobalSettings.criticalServiceMultiplier)
+              as int;
+    } else {
+      lowThreshold = GlobalSettings.lowServiceMultiplier;
+      critThreshold = GlobalSettings.criticalServiceMultiplier;
+    }
+
+    return servicesRemaining > critThreshold &&
+        servicesRemaining <= lowThreshold;
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = doc.data() as Map<String, dynamic>;
@@ -36,45 +79,85 @@ class ShoppingCard extends StatelessWidget {
         .toDouble();
     double total = truck + home;
 
-    return Dismissible(
-      key: Key(doc.id),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (_) async {
-        await _confirmDelete(context);
-        return false; // Don't dismiss, let the delete button handle it
-      },
-      background: Container(
-        color: Colors.red,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete, color: Colors.white, size: 28),
-      ),
-      child: Card(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: ListTile(
-          title: Text(
-            data["name"] ?? "",
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          subtitle: Text(
-            "Need: ${requiredQty.toStringAsFixed(1)} $unitType\n"
-            "On Hand: ${total.toStringAsFixed(1)} $unitType",
-            style: const TextStyle(fontSize: 14),
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ElevatedButton(
-                onPressed: () => _purchaseDialog(context, requiredQty),
-                child: const Text("Purchase", style: TextStyle(fontSize: 14)),
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ListTile(
+        title: Row(
+          children: [
+            // Status indicator dot and label
+            if (isCritical(data)) ...[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete, size: 20, color: Colors.red),
-                tooltip: "Delete Item",
-                onPressed: () => _confirmDelete(context),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  "Buy Now",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
+              const SizedBox(width: 8),
+            ] else if (isGettingLow(data)) ...[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.orange,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  "Getting Low",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
             ],
-          ),
+            // Item name
+            Expanded(
+              child: Text(
+                data["name"] ?? "",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        subtitle: Text(
+          "Need: ${requiredQty.toStringAsFixed(1)} $unitType\n"
+          "On Hand: ${total.toStringAsFixed(1)} $unitType",
+          style: const TextStyle(fontSize: 14),
+        ),
+        trailing: ElevatedButton(
+          onPressed: () => _purchaseDialog(context, requiredQty),
+          child: const Text("Purchase", style: TextStyle(fontSize: 14)),
         ),
       ),
     );
@@ -142,29 +225,6 @@ class ShoppingCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context) async {
-    await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Delete Item?"),
-        content: const Text("This cannot be undone."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              await service.deleteItem(doc.id);
-              if (context.mounted) Navigator.pop(context, true);
-            },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../widgets/inventory_card.dart';
 
 class InventoryService {
   final _db = FirebaseFirestore.instance.collection("items");
@@ -103,6 +104,71 @@ class InventoryService {
       });
     }
     await batch.commit();
+  }
+
+  Future<void> resetVerificationForTab(String tabKey) async {
+    QuerySnapshot snapshot;
+
+    if (tabKey == "perService") {
+      snapshot = await _db.get();
+      final docs = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final freq = data["inventoryFrequency"] ?? data["checkFrequency"];
+        return freq == "perService" || freq == "service" || freq == null;
+      }).toList();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in docs) {
+        batch.update(doc.reference, {
+          "truckVerifiedAt": null,
+          "truckVerifiedBy": null,
+          "updatedAt": FieldValue.serverTimestamp(),
+          "updatedBy": FirebaseAuth.instance.currentUser?.email,
+        });
+      }
+      await batch.commit();
+    } else if (tabKey == "all") {
+      snapshot = await _db.get();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, {
+          "truckVerifiedAt": null,
+          "truckVerifiedBy": null,
+          "updatedAt": FieldValue.serverTimestamp(),
+          "updatedBy": FirebaseAuth.instance.currentUser?.email,
+        });
+      }
+      await batch.commit();
+    } else if (tabKey == "warnings") {
+      snapshot = await _db.get();
+      final docs = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return InventoryCard.isWarning(data);
+      }).toList();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in docs) {
+        batch.update(doc.reference, {
+          "truckVerifiedAt": null,
+          "truckVerifiedBy": null,
+          "updatedAt": FieldValue.serverTimestamp(),
+          "updatedBy": FirebaseAuth.instance.currentUser?.email,
+        });
+      }
+      await batch.commit();
+    } else {
+      snapshot = await _db.where("inventoryFrequency", isEqualTo: tabKey).get();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, {
+          "truckVerifiedAt": null,
+          "truckVerifiedBy": null,
+          "updatedAt": FieldValue.serverTimestamp(),
+          "updatedBy": FirebaseAuth.instance.currentUser?.email,
+        });
+      }
+      await batch.commit();
+    }
   }
 
   Stream<QuerySnapshot> getItemsByFrequency(String frequency) {

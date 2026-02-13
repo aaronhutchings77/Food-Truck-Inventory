@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/settings_service.dart';
 
 class GlobalSettings {
@@ -8,16 +9,31 @@ class GlobalSettings {
   static int _lowServiceMultiplier = 2;
   static int _criticalServiceMultiplier = 1;
 
+  // Inventory session timestamps
+  static Map<String, Timestamp?> _inventorySessions = {};
+
   static int get targetServices => _targetServices;
   static int get truckTargetServices => _truckTargetServices;
   static int get lowServiceMultiplier => _lowServiceMultiplier;
   static int get criticalServiceMultiplier => _criticalServiceMultiplier;
+
+  static Timestamp? getInventorySession(String tabKey) {
+    return _inventorySessions["lastInventoryStartedAt_$tabKey"];
+  }
 
   static void initialize(Map<String, int> settings) {
     _targetServices = settings["targetServices"] ?? 5;
     _truckTargetServices = settings["truckTargetServices"] ?? 3;
     _lowServiceMultiplier = settings["lowServiceMultiplier"] ?? 2;
     _criticalServiceMultiplier = settings["criticalServiceMultiplier"] ?? 1;
+  }
+
+  static void initializeInventorySessions(Map<String, Timestamp?> sessions) {
+    _inventorySessions = sessions;
+  }
+
+  static Future<void> updateInventorySession(String tabKey) async {
+    await _settingsService.updateInventorySession(tabKey);
   }
 
   static Future<void> updateAll({
@@ -38,4 +54,7 @@ class GlobalSettings {
 
   static Stream<Map<String, int>> get settingsStream =>
       _settingsService.getSettingsStream();
+
+  static Stream<Map<String, Timestamp?>> get inventorySessionsStream =>
+      _settingsService.getInventorySessionsStream();
 }

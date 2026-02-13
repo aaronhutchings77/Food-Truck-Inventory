@@ -46,6 +46,47 @@ class _InventoryScreenState extends State<InventoryScreen>
     });
   }
 
+  String _formatTimestamp(Timestamp? timestamp) {
+    if (timestamp == null) return "Never started";
+    final date = timestamp.toDate();
+    return "${date.month}/${date.day}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
+  }
+
+  void _startInventorySession(String tabKey) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Start Inventory Session"),
+        content: Text(
+          "Start a new inventory session for this tab? This will reset verification status.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Start"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _service.resetVerificationForTab(tabKey);
+      await GlobalSettings.updateInventorySession(tabKey);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Inventory session started"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -223,7 +264,19 @@ class _InventoryScreenState extends State<InventoryScreen>
         StreamBuilder<Map<String, int>>(
           stream: GlobalSettings.settingsStream,
           builder: (context, snapshot) {
-            if (snapshot.hasData) GlobalSettings.initialize(snapshot.data!);
+            if (snapshot.hasData) {
+              GlobalSettings.initialize(snapshot.data!);
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+        // Keep inventory sessions stream alive for GlobalSettings cache
+        StreamBuilder<Map<String, Timestamp?>>(
+          stream: GlobalSettings.inventorySessionsStream,
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              GlobalSettings.initializeInventorySessions(snapshot.data!);
+            }
             return const SizedBox.shrink();
           },
         ),
@@ -316,6 +369,43 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _frequencyTab(String frequency) {
+    final tabKey = frequency;
+    final lastStarted = GlobalSettings.getInventorySession(tabKey);
+
+    return Column(
+      children: [
+        // Start Inventory button and timestamp
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => _startInventorySession(tabKey),
+                icon: const Icon(Icons.play_arrow),
+                label: const Text("Start Inventory"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                "Last Started: ${_formatTimestamp(lastStarted)}",
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Tab content
+        Expanded(child: _buildTabContent(frequency)),
+      ],
+    );
+  }
+
+  Widget _buildTabContent(String frequency) {
     // For perService, also include legacy items without inventoryFrequency
     if (frequency == "perService") {
       return StreamBuilder<QuerySnapshot>(
@@ -350,43 +440,113 @@ class _InventoryScreenState extends State<InventoryScreen>
   }
 
   Widget _warningsTab() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _service.getAllItems(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    final tabKey = "warnings";
+    final lastStarted = GlobalSettings.getInventorySession(tabKey);
 
-        final docs = _filterBySearch(snapshot.data!.docs).where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return InventoryCard.isWarning(data);
-        }).toList();
+    return Column(
+      children: [
+        // Start Inventory button and timestamp
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => _startInventorySession(tabKey),
+                icon: const Icon(Icons.play_arrow),
+                label: const Text("Start Inventory"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                "Last Started: ${_formatTimestamp(lastStarted)}",
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Tab content
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _service.getAllItems(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-        if (docs.isEmpty) {
-          return const Center(
-            child: Text(
-              "No items in warning state",
-              style: TextStyle(fontSize: 16),
-            ),
-          );
-        }
+              final docs = _filterBySearch(snapshot.data!.docs).where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return InventoryCard.isWarning(data);
+              }).toList();
 
-        return _buildCategoryGroupedList(docs, "warnings");
-      },
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Text(
+                    "No items in warning state",
+                    style: TextStyle(fontSize: 16),
+                  ),
+                );
+              }
+
+              return _buildCategoryGroupedList(docs, "warnings");
+            },
+          ),
+        ),
+      ],
     );
   }
 
   Widget _allItemsTab() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _service.getAllItems(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    final tabKey = "all";
+    final lastStarted = GlobalSettings.getInventorySession(tabKey);
 
-        final docs = _filterBySearch(snapshot.data!.docs);
-        return _buildCategoryGroupedList(docs, "all");
-      },
+    return Column(
+      children: [
+        // Start Inventory button and timestamp
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => _startInventorySession(tabKey),
+                icon: const Icon(Icons.play_arrow),
+                label: const Text("Start Inventory"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                "Last Started: ${_formatTimestamp(lastStarted)}",
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Tab content
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: _service.getAllItems(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final docs = _filterBySearch(snapshot.data!.docs);
+              return _buildCategoryGroupedList(docs, "all");
+            },
+          ),
+        ),
+      ],
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/shopping_card.dart';
+import '../widgets/inventory_card.dart';
 import '../settings/global_settings.dart';
 
 class ShoppingScreen extends StatefulWidget {
@@ -14,6 +15,53 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<QueryDocumentSnapshot> _allDocs = [];
   List<QueryDocumentSnapshot> _filteredDocs = [];
+
+  /// Determine if an item is critical (needs to buy now)
+  bool _isCritical(Map<String, dynamic> data) {
+    final servicesRemaining = InventoryCard.getServicesRemaining(data);
+
+    bool override = data["overrideWarnings"] == true;
+    int critThreshold;
+
+    if (override) {
+      critThreshold =
+          (data["criticalServices"] ?? GlobalSettings.criticalServiceMultiplier)
+              as int;
+    } else {
+      critThreshold = GlobalSettings.criticalServiceMultiplier;
+    }
+
+    return servicesRemaining <= critThreshold;
+  }
+
+  /// Determine if an item is getting low
+  bool _isGettingLow(Map<String, dynamic> data) {
+    final servicesRemaining = InventoryCard.getServicesRemaining(data);
+
+    bool override = data["overrideWarnings"] == true;
+    int lowThreshold;
+    int critThreshold;
+
+    if (override) {
+      lowThreshold =
+          (data["gettingLowServices"] ?? GlobalSettings.lowServiceMultiplier)
+              as int;
+      critThreshold =
+          (data["criticalServices"] ?? GlobalSettings.criticalServiceMultiplier)
+              as int;
+    } else {
+      lowThreshold = GlobalSettings.lowServiceMultiplier;
+      critThreshold = GlobalSettings.criticalServiceMultiplier;
+    }
+
+    return servicesRemaining > critThreshold &&
+        servicesRemaining <= lowThreshold;
+  }
+
+  /// Check if item needs shopping (either critical or getting low)
+  bool _needsShopping(Map<String, dynamic> data) {
+    return _isCritical(data) || _isGettingLow(data);
+  }
 
   @override
   void initState() {
@@ -115,10 +163,10 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                   ? _allDocs
                   : _filteredDocs;
 
-              // Shopping list: items where requiredQuantity > 0
+              // Shopping list: items that are critical or getting low
               final needsShopping = docsToUse.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
-                return ShoppingCard.getRequiredQuantity(data) > 0;
+                return _needsShopping(data);
               }).toList();
 
               if (needsShopping.isEmpty) {

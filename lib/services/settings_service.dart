@@ -24,6 +24,25 @@ class SettingsService {
     });
   }
 
+  Stream<Map<String, Timestamp?>> getInventorySessionsStream() {
+    return _db.doc(_doc).snapshots().map((snapshot) {
+      final data = snapshot.data() ?? {};
+      return {
+        "lastInventoryStartedAt_perService":
+            data["lastInventoryStartedAt_perService"],
+        "lastInventoryStartedAt_daily": data["lastInventoryStartedAt_daily"],
+        "lastInventoryStartedAt_weekly": data["lastInventoryStartedAt_weekly"],
+        "lastInventoryStartedAt_monthly":
+            data["lastInventoryStartedAt_monthly"],
+        "lastInventoryStartedAt_quarterly":
+            data["lastInventoryStartedAt_quarterly"],
+        "lastInventoryStartedAt_warnings":
+            data["lastInventoryStartedAt_warnings"],
+        "lastInventoryStartedAt_all": data["lastInventoryStartedAt_all"],
+      };
+    });
+  }
+
   Future<Map<String, int>> getSettings() async {
     final snapshot = await _db.doc(_doc).get();
     final data = snapshot.data() ?? {};
@@ -62,5 +81,11 @@ class SettingsService {
         await _db.doc(_doc).update({"targetServices": data["servicesTarget"]});
       }
     }
+  }
+
+  Future<void> updateInventorySession(String tabKey) async {
+    await _db.doc(_doc).update({
+      "lastInventoryStartedAt_$tabKey": FieldValue.serverTimestamp(),
+    });
   }
 }
