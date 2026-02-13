@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../settings/global_settings.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -94,53 +95,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: ListView(
-        children: [
-          const Text(
-            "Global Settings",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 24),
-          _settingsField(
-            "Overall Target Services",
-            _targetController,
-            "Number of services to plan overall inventory for",
-          ),
-          const SizedBox(height: 16),
-          _settingsField(
-            "Truck Target Services",
-            _truckTargetController,
-            "Number of services the truck should be stocked for",
-          ),
-          const SizedBox(height: 16),
-          _settingsField(
-            "Getting Low (services)",
-            _lowController,
-            "Warn when services remaining <= this value",
-          ),
-          const SizedBox(height: 16),
-          _settingsField(
-            "Need to Purchase (services)",
-            _criticalController,
-            "Critical warning when services remaining <= this value",
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: _saving ? null : _save,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+    return Scaffold(
+      appBar: AppBar(title: const Text("Settings")),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: ListView(
+          children: [
+            const Text(
+              "Global Settings",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
-            child: _saving
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text("Save Settings", style: TextStyle(fontSize: 18)),
-          ),
-        ],
+            const SizedBox(height: 24),
+            _settingsField(
+              "Overall Target Services",
+              _targetController,
+              "Number of services to plan overall inventory for",
+            ),
+            const SizedBox(height: 16),
+            _settingsField(
+              "Truck Target Services",
+              _truckTargetController,
+              "Number of services the truck should be stocked for",
+            ),
+            const SizedBox(height: 16),
+            _settingsField(
+              "Getting Low (services)",
+              _lowController,
+              "Warn when services remaining <= this value",
+            ),
+            const SizedBox(height: 16),
+            _settingsField(
+              "Need to Purchase (services)",
+              _criticalController,
+              "Critical warning when services remaining <= this value",
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: _saving ? null : _save,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: _saving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text("Save Settings", style: TextStyle(fontSize: 18)),
+            ),
+            const SizedBox(height: 32),
+            OutlinedButton.icon(
+              onPressed: () => FirebaseAuth.instance.signOut(),
+              icon: const Icon(Icons.logout),
+              label: const Text("Log Off", style: TextStyle(fontSize: 16)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

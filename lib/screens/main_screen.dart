@@ -53,7 +53,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final titles = ["Inventory", "Shopping", "Transfers", "Settings"];
+    final titles = ["Inventory", "Shopping", "Transfers"];
 
     return Scaffold(
       appBar: AppBar(
@@ -67,56 +67,42 @@ class _MainScreenState extends State<MainScreen> {
                 MaterialPageRoute(builder: (_) => const AddItemScreen()),
               ),
             ),
-          PopupMenuButton<String>(
+          IconButton(
             icon: const Icon(Icons.settings),
-            onSelected: (value) {
-              if (value == 'logout') {
-                FirebaseAuth.instance.signOut();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout),
-                    SizedBox(width: 8),
-                    Text('Log Off'),
-                  ],
-                ),
-              ),
-            ],
+            tooltip: 'Settings',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),
       body: _buildBody(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: index,
-        onTap: (v) => setState(() => index = v),
-        type: BottomNavigationBarType.fixed,
-        selectedLabelStyle: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
+      bottomNavigationBar: SafeArea(
+        child: BottomNavigationBar(
+          currentIndex: index,
+          onTap: (v) => setState(() => index = v),
+          type: BottomNavigationBarType.fixed,
+          selectedLabelStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: const TextStyle(fontSize: 13),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.inventory),
+              label: "Inventory",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.shopping_cart),
+              label: "Shopping",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.swap_horiz),
+              label: "Transfers",
+            ),
+          ],
         ),
-        unselectedLabelStyle: const TextStyle(fontSize: 13),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.inventory),
-            label: "Inventory",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
-            label: "Shopping",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.swap_horiz),
-            label: "Transfers",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: "Settings",
-          ),
-        ],
       ),
     );
   }
@@ -129,8 +115,6 @@ class _MainScreenState extends State<MainScreen> {
         return const ShoppingScreen();
       case 2:
         return const TransfersScreen();
-      case 3:
-        return const SettingsScreen();
       default:
         return const InventoryScreen();
     }
