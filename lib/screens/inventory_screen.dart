@@ -11,6 +11,8 @@ class InventoryScreen extends StatefulWidget {
   State<InventoryScreen> createState() => _InventoryScreenState();
 }
 
+enum InventoryFilter { all, verified, notVerified }
+
 class _InventoryScreenState extends State<InventoryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
@@ -32,13 +34,16 @@ class _InventoryScreenState extends State<InventoryScreen>
   // Multi-select state (checkboxes always visible)
   final Set<String> _selectedIds = {};
 
-  // Cached docs for unchecked count
-  List<QueryDocumentSnapshot> _allDocsCache = [];
+  // Inventory status filter
+  InventoryFilter _statusFilter = InventoryFilter.all;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
+    _searchController.addListener(() {
+      setState(() {}); // Rebuild to show/hide clear button
+    });
   }
 
   @override
@@ -178,45 +183,6 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
   }
 
-  void _editTargetInline(
-    String label,
-    int currentValue,
-    Future<void> Function(int) onSave,
-  ) {
-    final ctl = TextEditingController(text: currentValue.toString());
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text("Edit $label"),
-        content: TextField(
-          controller: ctl,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: label,
-            border: const OutlineInputBorder(),
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              final val = int.tryParse(ctl.text);
-              if (val != null && val > 0) {
-                await onSave(val);
-              }
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text("Save"),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -253,127 +219,12 @@ class _InventoryScreenState extends State<InventoryScreen>
               ],
             ),
           ),
-        // Global settings header + truck target + unchecked counter
+        // Keep settings stream alive for GlobalSettings cache
         StreamBuilder<Map<String, int>>(
           stream: GlobalSettings.settingsStream,
           builder: (context, snapshot) {
-            final settings = snapshot.data ?? {};
-            final target =
-                settings["targetServices"] ?? GlobalSettings.targetServices;
-            final truckTarget =
-                settings["truckTargetServices"] ??
-                GlobalSettings.truckTargetServices;
-            final low =
-                settings["lowServiceMultiplier"] ??
-                GlobalSettings.lowServiceMultiplier;
-            final crit =
-                settings["criticalServiceMultiplier"] ??
-                GlobalSettings.criticalServiceMultiplier;
-
-            // Update cache
             if (snapshot.hasData) GlobalSettings.initialize(snapshot.data!);
-
-            // Count unchecked truck items from cache
-            final uncheckedCount = _allDocsCache.where((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              return data["truckVerifiedAt"] == null;
-            }).length;
-
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: Colors.blue.shade50,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Inventory Levels (QTY of Services)",
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  InkWell(
-                    onTap: () => _editTargetInline(
-                      "Overall Target Services",
-                      target,
-                      (val) => GlobalSettings.updateAll(
-                        targetServices: val,
-                        truckTargetServices: truckTarget,
-                        lowServiceMultiplier: low,
-                        criticalServiceMultiplier: crit,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          "Overall Target Services: $target",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.edit, size: 14, color: Colors.grey.shade600),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  InkWell(
-                    onTap: () => _editTargetInline(
-                      "Truck Target Services",
-                      truckTarget,
-                      (val) => GlobalSettings.updateAll(
-                        targetServices: target,
-                        truckTargetServices: val,
-                        lowServiceMultiplier: low,
-                        criticalServiceMultiplier: crit,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          "Truck Target Services: $truckTarget",
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(Icons.edit, size: 14, color: Colors.grey.shade600),
-                      ],
-                    ),
-                  ),
-                  if (uncheckedCount >= 0) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: uncheckedCount > 0
-                            ? Colors.red.shade50
-                            : Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                          color: uncheckedCount > 0
-                              ? Colors.red.shade200
-                              : Colors.green.shade200,
-                        ),
-                      ),
-                      child: Text(
-                        "Unchecked Truck Items: $uncheckedCount",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: uncheckedCount > 0
-                              ? Colors.red.shade700
-                              : Colors.green.shade700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            );
+            return const SizedBox.shrink();
           },
         ),
         TabBar(
@@ -390,14 +241,62 @@ class _InventoryScreenState extends State<InventoryScreen>
           padding: const EdgeInsets.all(8.0),
           child: TextField(
             controller: _searchController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: "Search items...",
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        FocusScope.of(context).unfocus();
+                        setState(() {});
+                      },
+                    )
+                  : null,
+              border: const OutlineInputBorder(),
             ),
             onChanged: (_) => setState(() {}),
           ),
         ),
+        // Status filter control
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Row(
+            children: [
+              const Text(
+                "Status: ",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SegmentedButton<InventoryFilter>(
+                  segments: const [
+                    ButtonSegment<InventoryFilter>(
+                      value: InventoryFilter.all,
+                      label: Text('All'),
+                    ),
+                    ButtonSegment<InventoryFilter>(
+                      value: InventoryFilter.verified,
+                      label: Text('Verified'),
+                    ),
+                    ButtonSegment<InventoryFilter>(
+                      value: InventoryFilter.notVerified,
+                      label: Text('Not Verified'),
+                    ),
+                  ],
+                  selected: {_statusFilter},
+                  onSelectionChanged: (Set<InventoryFilter> newSelection) {
+                    setState(() {
+                      _statusFilter = newSelection.first;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: TabBarView(
             controller: _tabController,
@@ -425,8 +324,6 @@ class _InventoryScreenState extends State<InventoryScreen>
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          _allDocsCache = snapshot.data!.docs;
 
           final docs = _filterBySearch(snapshot.data!.docs).where((doc) {
             final data = doc.data() as Map<String, dynamic>;
@@ -460,8 +357,6 @@ class _InventoryScreenState extends State<InventoryScreen>
           return const Center(child: CircularProgressIndicator());
         }
 
-        _allDocsCache = snapshot.data!.docs;
-
         final docs = _filterBySearch(snapshot.data!.docs).where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           return InventoryCard.isWarning(data);
@@ -489,8 +384,6 @@ class _InventoryScreenState extends State<InventoryScreen>
           return const Center(child: CircularProgressIndicator());
         }
 
-        _allDocsCache = snapshot.data!.docs;
-
         final docs = _filterBySearch(snapshot.data!.docs);
         return _buildCategoryGroupedList(docs, "all");
       },
@@ -501,17 +394,37 @@ class _InventoryScreenState extends State<InventoryScreen>
     List<QueryDocumentSnapshot> docs,
   ) {
     final query = _searchController.text.toLowerCase();
-    if (query.isEmpty) return docs;
+    var filteredDocs = docs;
 
-    return docs.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      final name = (data["name"] ?? "").toLowerCase();
-      final model = (data["model"] ?? "").toLowerCase();
-      final unitType = (data["unitType"] ?? "").toLowerCase();
-      return name.contains(query) ||
-          model.contains(query) ||
-          unitType.contains(query);
-    }).toList();
+    // Apply search filter
+    if (query.isNotEmpty) {
+      filteredDocs = filteredDocs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final name = (data["name"] ?? "").toLowerCase();
+        final model = (data["model"] ?? "").toLowerCase();
+        final unitType = (data["unitType"] ?? "").toLowerCase();
+        return name.contains(query) ||
+            model.contains(query) ||
+            unitType.contains(query);
+      }).toList();
+    }
+
+    // Apply status filter
+    if (_statusFilter != InventoryFilter.all) {
+      filteredDocs = filteredDocs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final truckVerifiedAt = data["truckVerifiedAt"];
+
+        if (_statusFilter == InventoryFilter.verified) {
+          return truckVerifiedAt != null;
+        } else if (_statusFilter == InventoryFilter.notVerified) {
+          return truckVerifiedAt == null;
+        }
+        return true;
+      }).toList();
+    }
+
+    return filteredDocs;
   }
 
   Widget _buildCategoryGroupedList(
@@ -533,6 +446,15 @@ class _InventoryScreenState extends State<InventoryScreen>
       } else {
         grouped["food"]!.add(doc);
       }
+    }
+
+    // Sort items alphabetically within each category
+    for (var category in grouped.keys) {
+      grouped[category]!.sort((a, b) {
+        final aName = (a.data() as Map<String, dynamic>)["name"] ?? "";
+        final bName = (b.data() as Map<String, dynamic>)["name"] ?? "";
+        return aName.toLowerCase().compareTo(bName.toLowerCase());
+      });
     }
 
     return ListView(

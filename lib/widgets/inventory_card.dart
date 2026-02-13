@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/inventory_service.dart';
 import '../settings/global_settings.dart';
+import '../screens/edit_item_screen.dart';
 
 class InventoryCard extends StatefulWidget {
   final QueryDocumentSnapshot doc;
@@ -67,6 +68,7 @@ class _InventoryCardState extends State<InventoryCard> {
   final _truckCtl = TextEditingController();
   final _truckFocus = FocusNode();
   Timer? _truckDebounce;
+  double _lastSavedTruckValue = 0.0;
 
   @override
   void initState() {
@@ -90,6 +92,7 @@ class _InventoryCardState extends State<InventoryCard> {
           (newData["truckQuantity"] ?? newData["truckAmount"] ?? 0.0)
               .toDouble();
       if (oldTruck != newTruck && !_truckFocus.hasFocus) {
+        _lastSavedTruckValue = newTruck;
         _truckCtl.text = _formatQty(newTruck);
       }
     }
@@ -97,9 +100,9 @@ class _InventoryCardState extends State<InventoryCard> {
 
   void _syncController() {
     final data = widget.doc.data() as Map<String, dynamic>;
-    _truckCtl.text = _formatQty(
-      (data["truckQuantity"] ?? data["truckAmount"] ?? 0.0).toDouble(),
-    );
+    _lastSavedTruckValue = (data["truckQuantity"] ?? data["truckAmount"] ?? 0.0)
+        .toDouble();
+    _truckCtl.text = _formatQty(_lastSavedTruckValue);
   }
 
   String _formatQty(double val) {
@@ -134,8 +137,16 @@ class _InventoryCardState extends State<InventoryCard> {
   void _saveTruck(String value) {
     final val = double.tryParse(value);
     if (val != null && val >= 0) {
-      _service.updateField(widget.doc.id, "truckQuantity", val);
+      // Only proceed if the value actually changed
+      if (val != _lastSavedTruckValue) {
+        _updateTruckWithVerification(val);
+        _lastSavedTruckValue = val;
+      }
     }
+  }
+
+  void _updateTruckWithVerification(double newValue) async {
+    await _service.updateTruckQuantityWithVerification(widget.doc.id, newValue);
   }
 
   void _toggleTruckVerified(Map<String, dynamic> data) {
@@ -157,7 +168,7 @@ class _InventoryCardState extends State<InventoryCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Row 1: Selection checkbox + Item Name
+            // Row 1: Selection checkbox + Item Name + Edit/Delete buttons
             Row(
               children: [
                 SizedBox(
@@ -177,6 +188,41 @@ class _InventoryCardState extends State<InventoryCard> {
                       fontWeight: FontWeight.w600,
                     ),
                     overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Edit button
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: 20,
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: "Edit Details",
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EditItemScreen(doc: widget.doc),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Delete button
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: 20,
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Colors.red.shade400,
+                    ),
+                    tooltip: "Delete",
+                    onPressed: () => _confirmDelete(context),
                   ),
                 ),
               ],
@@ -250,6 +296,29 @@ class _InventoryCardState extends State<InventoryCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Delete Item?"),
+        content: const Text("This cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await _service.deleteItem(widget.doc.id);
+              if (dialogContext.mounted) Navigator.pop(dialogContext, true);
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

@@ -19,6 +19,9 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_filterItems);
+    _searchController.addListener(() {
+      setState(() {}); // Rebuild to show/hide clear button
+    });
   }
 
   @override
@@ -81,11 +84,22 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
           padding: const EdgeInsets.all(8.0),
           child: TextField(
             controller: _searchController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: "Search items...",
-              prefixIcon: Icon(Icons.search),
-              border: OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        FocusScope.of(context).unfocus();
+                        setState(() {});
+                      },
+                    )
+                  : null,
+              border: const OutlineInputBorder(),
             ),
+            onChanged: (_) => setState(() {}),
           ),
         ),
         Expanded(
@@ -129,6 +143,25 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                 final data = doc.data() as Map<String, dynamic>;
                 return (data["category"] ?? "food") == "equipment";
               }).toList();
+
+              // Sort items alphabetically within each category
+              foodItems.sort((a, b) {
+                final aName = (a.data() as Map<String, dynamic>)["name"] ?? "";
+                final bName = (b.data() as Map<String, dynamic>)["name"] ?? "";
+                return aName.toLowerCase().compareTo(bName.toLowerCase());
+              });
+
+              suppliesItems.sort((a, b) {
+                final aName = (a.data() as Map<String, dynamic>)["name"] ?? "";
+                final bName = (b.data() as Map<String, dynamic>)["name"] ?? "";
+                return aName.toLowerCase().compareTo(bName.toLowerCase());
+              });
+
+              equipmentItems.sort((a, b) {
+                final aName = (a.data() as Map<String, dynamic>)["name"] ?? "";
+                final bName = (b.data() as Map<String, dynamic>)["name"] ?? "";
+                return aName.toLowerCase().compareTo(bName.toLowerCase());
+              });
 
               return ListView(
                 children: [

@@ -14,6 +14,14 @@ class _TransfersScreenState extends State<TransfersScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {}); // Rebuild to show/hide clear button
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -46,10 +54,20 @@ class _TransfersScreenState extends State<TransfersScreen> {
               padding: const EdgeInsets.all(8.0),
               child: TextField(
                 controller: _searchController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: "Search items...",
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            FocusScope.of(context).unfocus();
+                            setState(() {});
+                          },
+                        )
+                      : null,
+                  border: const OutlineInputBorder(),
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -94,6 +112,31 @@ class _TransfersScreenState extends State<TransfersScreen> {
                         break;
                     }
                   }
+
+                  // Sort items alphabetically within each transfer section
+                  moveFromHome.sort((a, b) {
+                    final aName =
+                        (a.doc.data() as Map<String, dynamic>)["name"] ?? "";
+                    final bName =
+                        (b.doc.data() as Map<String, dynamic>)["name"] ?? "";
+                    return aName.toLowerCase().compareTo(bName.toLowerCase());
+                  });
+
+                  buyAndMove.sort((a, b) {
+                    final aName =
+                        (a.doc.data() as Map<String, dynamic>)["name"] ?? "";
+                    final bName =
+                        (b.doc.data() as Map<String, dynamic>)["name"] ?? "";
+                    return aName.toLowerCase().compareTo(bName.toLowerCase());
+                  });
+
+                  buyOnly.sort((a, b) {
+                    final aName =
+                        (a.doc.data() as Map<String, dynamic>)["name"] ?? "";
+                    final bName =
+                        (b.doc.data() as Map<String, dynamic>)["name"] ?? "";
+                    return aName.toLowerCase().compareTo(bName.toLowerCase());
+                  });
 
                   if (moveFromHome.isEmpty &&
                       buyAndMove.isEmpty &&

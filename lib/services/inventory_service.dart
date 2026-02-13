@@ -18,6 +18,20 @@ class InventoryService {
     });
   }
 
+  Future<void> updateTruckQuantityWithVerification(
+    String id,
+    double value,
+  ) async {
+    final email = FirebaseAuth.instance.currentUser?.email;
+    await _db.doc(id).update({
+      "truckQuantity": snap(value),
+      "truckVerifiedAt": FieldValue.serverTimestamp(),
+      "truckVerifiedBy": email,
+      "updatedAt": FieldValue.serverTimestamp(),
+      "updatedBy": email,
+    });
+  }
+
   Future<void> addPurchase(String id, double total, double truckAdd) async {
     total = snap(total);
     truckAdd = snap(truckAdd);
