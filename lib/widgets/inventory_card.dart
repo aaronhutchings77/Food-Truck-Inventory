@@ -222,7 +222,7 @@ class _InventoryCardState extends State<InventoryCard> {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -285,7 +285,7 @@ class _InventoryCardState extends State<InventoryCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             // Quantity sections based on mode
             if (widget.mode == InventoryMode.truck ||
                 widget.mode == InventoryMode.both)
@@ -331,57 +331,61 @@ class _InventoryCardState extends State<InventoryCard> {
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 6),
-          SizedBox(
-            width: 120,
-            height: 48,
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20),
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 12,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              ),
-              onChanged: onChanged,
-            ),
-          ),
-          const SizedBox(height: 10),
-          // Verified checkbox
-          InkWell(
-            onTap: onToggleVerified,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: Checkbox(
-                    value: isVerified,
-                    onChanged: (_) => onToggleVerified(),
+          Row(
+            children: [
+              SizedBox(
+                width: 120,
+                height: 48,
+                child: TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
                   ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  "Verified",
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w500,
-                    color: isVerified
-                        ? Colors.green.shade700
-                        : Colors.grey.shade600,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 20),
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 12,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
+                  onChanged: onChanged,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              // Verified checkbox inline with quantity
+              InkWell(
+                onTap: onToggleVerified,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Checkbox(
+                        value: isVerified,
+                        onChanged: (_) => onToggleVerified(),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Verified",
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w500,
+                        color: isVerified
+                            ? Colors.green.shade700
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
