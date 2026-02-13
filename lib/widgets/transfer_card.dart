@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/inventory_service.dart';
+import '../screens/edit_item_screen.dart';
 
 class TransferCard extends StatelessWidget {
   final QueryDocumentSnapshot doc;
@@ -35,9 +36,31 @@ class TransferCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              name,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                  tooltip: "Edit Details",
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            EditItemScreen(doc: doc, hideQuantities: true),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: 6),
             Text(
@@ -130,10 +153,20 @@ class TransferCard extends StatelessWidget {
     if (confirmed == true) {
       final qty = double.tryParse(qtyController.text) ?? 0;
       if (qty > 0) {
-        await service.updateField(doc.id, "truckQuantity",
-            ((doc.data() as Map<String, dynamic>)["truckQuantity"] ?? 0.0).toDouble() + qty);
-        await service.updateField(doc.id, "homeQuantity",
-            ((doc.data() as Map<String, dynamic>)["homeQuantity"] ?? 0.0).toDouble() - qty);
+        await service.updateField(
+          doc.id,
+          "truckQuantity",
+          ((doc.data() as Map<String, dynamic>)["truckQuantity"] ?? 0.0)
+                  .toDouble() +
+              qty,
+        );
+        await service.updateField(
+          doc.id,
+          "homeQuantity",
+          ((doc.data() as Map<String, dynamic>)["homeQuantity"] ?? 0.0)
+                  .toDouble() -
+              qty,
+        );
       }
     }
   }
@@ -146,7 +179,9 @@ class TransferCard extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text("Add from Store to ${destination == "truck" ? "Truck" : "Home"}"),
+        title: Text(
+          "Add from Store to ${destination == "truck" ? "Truck" : "Home"}",
+        ),
         content: TextField(
           controller: qtyController,
           decoration: const InputDecoration(labelText: "Quantity purchased"),

@@ -6,6 +6,9 @@ class InventoryService {
   final _db = FirebaseFirestore.instance.collection("items");
   final _settingsDb = FirebaseFirestore.instance.collection("app_settings");
 
+  // Public getter for database access
+  CollectionReference get itemsCollection => _db;
+
   double snap(double value) {
     if (value < 0) return 0;
     return (value * 2).round() / 2;
@@ -93,6 +96,39 @@ class InventoryService {
     }
   }
 
+  Future<void> setHomeVerified(String id, bool verified) async {
+    final email = FirebaseAuth.instance.currentUser?.email;
+    if (verified) {
+      await _db.doc(id).update({
+        "homeVerifiedAt": FieldValue.serverTimestamp(),
+        "homeVerifiedBy": email,
+        "updatedAt": FieldValue.serverTimestamp(),
+        "updatedBy": email,
+      });
+    } else {
+      await _db.doc(id).update({
+        "homeVerifiedAt": null,
+        "homeVerifiedBy": null,
+        "updatedAt": FieldValue.serverTimestamp(),
+        "updatedBy": email,
+      });
+    }
+  }
+
+  Future<void> updateHomeQuantityWithVerification(
+    String id,
+    double value,
+  ) async {
+    final email = FirebaseAuth.instance.currentUser?.email;
+    await _db.doc(id).update({
+      "homeQuantity": snap(value),
+      "homeVerifiedAt": FieldValue.serverTimestamp(),
+      "homeVerifiedBy": email,
+      "updatedAt": FieldValue.serverTimestamp(),
+      "updatedBy": email,
+    });
+  }
+
   Future<void> bulkUpdate(List<String> ids, Map<String, dynamic> fields) async {
     final batch = FirebaseFirestore.instance.batch();
     final email = FirebaseAuth.instance.currentUser?.email;
@@ -106,7 +142,7 @@ class InventoryService {
     await batch.commit();
   }
 
-  Future<void> resetVerificationForTab(String tabKey) async {
+  Future<void> resetTruckVerificationForTab(String tabKey) async {
     QuerySnapshot snapshot;
 
     if (tabKey == "perService") {
@@ -163,6 +199,71 @@ class InventoryService {
         batch.update(doc.reference, {
           "truckVerifiedAt": null,
           "truckVerifiedBy": null,
+          "updatedAt": FieldValue.serverTimestamp(),
+          "updatedBy": FirebaseAuth.instance.currentUser?.email,
+        });
+      }
+      await batch.commit();
+    }
+  }
+
+  Future<void> resetHomeVerificationForTab(String tabKey) async {
+    QuerySnapshot snapshot;
+
+    if (tabKey == "perService") {
+      snapshot = await _db.get();
+      final docs = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final freq = data["inventoryFrequency"] ?? data["checkFrequency"];
+        return freq == "perService" || freq == "service" || freq == null;
+      }).toList();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in docs) {
+        batch.update(doc.reference, {
+          "homeVerifiedAt": null,
+          "homeVerifiedBy": null,
+          "updatedAt": FieldValue.serverTimestamp(),
+          "updatedBy": FirebaseAuth.instance.currentUser?.email,
+        });
+      }
+      await batch.commit();
+    } else if (tabKey == "all") {
+      snapshot = await _db.get();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, {
+          "homeVerifiedAt": null,
+          "homeVerifiedBy": null,
+          "updatedAt": FieldValue.serverTimestamp(),
+          "updatedBy": FirebaseAuth.instance.currentUser?.email,
+        });
+      }
+      await batch.commit();
+    } else if (tabKey == "warnings") {
+      snapshot = await _db.get();
+      final docs = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return InventoryCard.isWarning(data);
+      }).toList();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in docs) {
+        batch.update(doc.reference, {
+          "homeVerifiedAt": null,
+          "homeVerifiedBy": null,
+          "updatedAt": FieldValue.serverTimestamp(),
+          "updatedBy": FirebaseAuth.instance.currentUser?.email,
+        });
+      }
+      await batch.commit();
+    } else {
+      snapshot = await _db.where("inventoryFrequency", isEqualTo: tabKey).get();
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in snapshot.docs) {
+        batch.update(doc.reference, {
+          "homeVerifiedAt": null,
+          "homeVerifiedBy": null,
           "updatedAt": FieldValue.serverTimestamp(),
           "updatedBy": FirebaseAuth.instance.currentUser?.email,
         });

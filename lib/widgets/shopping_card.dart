@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/inventory_service.dart';
 import '../widgets/inventory_card.dart';
 import '../settings/global_settings.dart';
+import '../screens/edit_item_screen.dart';
 
 class ShoppingCard extends StatelessWidget {
   final QueryDocumentSnapshot doc;
@@ -155,9 +156,27 @@ class ShoppingCard extends StatelessWidget {
           "On Hand: ${total.toStringAsFixed(1)} $unitType",
           style: const TextStyle(fontSize: 14),
         ),
-        trailing: ElevatedButton(
-          onPressed: () => _purchaseDialog(context, requiredQty),
-          child: const Text("Purchase", style: TextStyle(fontSize: 14)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: "Edit Details",
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        EditItemScreen(doc: doc, hideQuantities: true),
+                  ),
+                );
+              },
+            ),
+            ElevatedButton(
+              onPressed: () => _purchaseDialog(context, requiredQty),
+              child: const Text("Purchase", style: TextStyle(fontSize: 14)),
+            ),
+          ],
         ),
       ),
     );

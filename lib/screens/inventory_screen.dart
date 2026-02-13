@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/inventory_card.dart';
 import '../settings/global_settings.dart';
 import '../services/inventory_service.dart';
+import '../models/inventory_mode.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -37,6 +38,9 @@ class _InventoryScreenState extends State<InventoryScreen>
   // Inventory status filter
   InventoryFilter _statusFilter = InventoryFilter.all;
 
+  // Mode toggle (Truck/Home/Both)
+  InventoryMode _mode = InventoryMode.truck;
+
   @override
   void initState() {
     super.initState();
@@ -52,13 +56,13 @@ class _InventoryScreenState extends State<InventoryScreen>
     return "${date.month}/${date.day}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
   }
 
-  void _startInventorySession(String tabKey) async {
+  void _startTruckInventorySession(String tabKey) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Start Inventory Session"),
+        title: const Text("Start Truck Inventory Session"),
         content: Text(
-          "Start a new inventory session for this tab? This will reset verification status.",
+          "Start a new truck inventory session for this tab? This will reset truck verification status.",
         ),
         actions: [
           TextButton(
@@ -74,12 +78,47 @@ class _InventoryScreenState extends State<InventoryScreen>
     );
 
     if (confirmed == true) {
-      await _service.resetVerificationForTab(tabKey);
-      await GlobalSettings.updateInventorySession(tabKey);
+      await _service.resetTruckVerificationForTab(tabKey);
+      await GlobalSettings.updateTruckInventorySession(tabKey);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Inventory session started"),
+            content: Text("Truck inventory session started"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  void _startHomeInventorySession(String tabKey) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Start Home Inventory Session"),
+        content: Text(
+          "Start a new home inventory session for this tab? This will reset home verification status.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Start"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _service.resetHomeVerificationForTab(tabKey);
+      await GlobalSettings.updateHomeInventorySession(tabKey);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Home inventory session started"),
             duration: Duration(seconds: 2),
           ),
         );
@@ -312,6 +351,33 @@ class _InventoryScreenState extends State<InventoryScreen>
             onChanged: (_) => setState(() {}),
           ),
         ),
+        // Mode toggle (Truck/Home/Both)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: SegmentedButton<InventoryMode>(
+            segments: const [
+              ButtonSegment<InventoryMode>(
+                value: InventoryMode.truck,
+                label: Text('Truck'),
+              ),
+              ButtonSegment<InventoryMode>(
+                value: InventoryMode.home,
+                label: Text('Home'),
+              ),
+              ButtonSegment<InventoryMode>(
+                value: InventoryMode.both,
+                label: Text('Both'),
+              ),
+            ],
+            selected: {_mode},
+            onSelectionChanged: (Set<InventoryMode> newSelection) {
+              setState(() {
+                _mode = newSelection.first;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
         // Status filter control
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8.0),
@@ -370,30 +436,33 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Widget _frequencyTab(String frequency) {
     final tabKey = frequency;
-    final lastStarted = GlobalSettings.getInventorySession(tabKey);
 
     return Column(
       children: [
-        // Start Inventory button and timestamp
+        // Status display based on mode
+        _buildStatusDisplay(tabKey),
+        // Start Inventory buttons
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
               ElevatedButton.icon(
-                onPressed: () => _startInventorySession(tabKey),
-                icon: const Icon(Icons.play_arrow),
-                label: const Text("Start Inventory"),
+                onPressed: () => _startTruckInventorySession(tabKey),
+                icon: const Icon(Icons.local_shipping),
+                label: const Text("Start Truck Inventory"),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
                 ),
               ),
-              const SizedBox(width: 16),
-              Text(
-                "Last Started: ${_formatTimestamp(lastStarted)}",
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _startHomeInventorySession(tabKey),
+                icon: const Icon(Icons.home),
+                label: const Text("Start Home Inventory"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                 ),
               ),
             ],
@@ -403,6 +472,192 @@ class _InventoryScreenState extends State<InventoryScreen>
         Expanded(child: _buildTabContent(frequency)),
       ],
     );
+  }
+
+  Widget _buildStatusDisplay(String tabKey) {
+    final truckLastStarted = GlobalSettings.getTruckInventorySession(tabKey);
+    final homeLastStarted = GlobalSettings.getHomeInventorySession(tabKey);
+
+    if (_mode == InventoryMode.truck) {
+      return FutureBuilder<int>(
+        future: _getUncheckedCount(tabKey, 'truck'),
+        builder: (context, snapshot) {
+          final uncheckedCount = snapshot.data ?? 0;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  "Truck Unchecked: $uncheckedCount",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  "Last Truck Start: ${_formatTimestamp(truckLastStarted)}",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } else if (_mode == InventoryMode.home) {
+      return FutureBuilder<int>(
+        future: _getUncheckedCount(tabKey, 'home'),
+        builder: (context, snapshot) {
+          final uncheckedCount = snapshot.data ?? 0;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  "Home Unchecked: $uncheckedCount",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  "Last Home Start: ${_formatTimestamp(homeLastStarted)}",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } else {
+      // Both mode
+      return FutureBuilder<Map<String, int>>(
+        future: _getBothUncheckedCounts(tabKey),
+        builder: (context, snapshot) {
+          final truckUnchecked = snapshot.data?['truck'] ?? 0;
+          final homeUnchecked = snapshot.data?['home'] ?? 0;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      "Truck Unchecked: $truckUnchecked",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.red,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      "Home Unchecked: $homeUnchecked",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      "Last Truck Start: ${_formatTimestamp(truckLastStarted)}",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      "Last Home Start: ${_formatTimestamp(homeLastStarted)}",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  Future<int> _getUncheckedCount(String tabKey, String type) async {
+    QuerySnapshot snapshot;
+
+    if (tabKey == "perService") {
+      snapshot = await _service.itemsCollection.get();
+      final docs = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final freq = data["inventoryFrequency"] ?? data["checkFrequency"];
+        return freq == "perService" || freq == "service" || freq == null;
+      }).toList();
+
+      return docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final verifiedField = type == 'truck'
+            ? "truckVerifiedAt"
+            : "homeVerifiedAt";
+        return data[verifiedField] == null;
+      }).length;
+    } else if (tabKey == "all") {
+      snapshot = await _service.itemsCollection.get();
+      return snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final verifiedField = type == 'truck'
+            ? "truckVerifiedAt"
+            : "homeVerifiedAt";
+        return data[verifiedField] == null;
+      }).length;
+    } else if (tabKey == "warnings") {
+      snapshot = await _service.itemsCollection.get();
+      final docs = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return InventoryCard.isWarning(data);
+      }).toList();
+
+      return docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final verifiedField = type == 'truck'
+            ? "truckVerifiedAt"
+            : "homeVerifiedAt";
+        return data[verifiedField] == null;
+      }).length;
+    } else {
+      snapshot = await _service.itemsCollection
+          .where("inventoryFrequency", isEqualTo: tabKey)
+          .get();
+      return snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final verifiedField = type == 'truck'
+            ? "truckVerifiedAt"
+            : "homeVerifiedAt";
+        return data[verifiedField] == null;
+      }).length;
+    }
+  }
+
+  Future<Map<String, int>> _getBothUncheckedCounts(String tabKey) async {
+    final truckCount = await _getUncheckedCount(tabKey, 'truck');
+    final homeCount = await _getUncheckedCount(tabKey, 'home');
+    return {'truck': truckCount, 'home': homeCount};
   }
 
   Widget _buildTabContent(String frequency) {
@@ -441,30 +696,33 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Widget _warningsTab() {
     final tabKey = "warnings";
-    final lastStarted = GlobalSettings.getInventorySession(tabKey);
 
     return Column(
       children: [
-        // Start Inventory button and timestamp
+        // Status display based on mode
+        _buildStatusDisplay(tabKey),
+        // Start Inventory buttons
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
               ElevatedButton.icon(
-                onPressed: () => _startInventorySession(tabKey),
-                icon: const Icon(Icons.play_arrow),
-                label: const Text("Start Inventory"),
+                onPressed: () => _startTruckInventorySession(tabKey),
+                icon: const Icon(Icons.local_shipping),
+                label: const Text("Start Truck Inventory"),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
                 ),
               ),
-              const SizedBox(width: 16),
-              Text(
-                "Last Started: ${_formatTimestamp(lastStarted)}",
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _startHomeInventorySession(tabKey),
+                icon: const Icon(Icons.home),
+                label: const Text("Start Home Inventory"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                 ),
               ),
             ],
@@ -503,30 +761,33 @@ class _InventoryScreenState extends State<InventoryScreen>
 
   Widget _allItemsTab() {
     final tabKey = "all";
-    final lastStarted = GlobalSettings.getInventorySession(tabKey);
 
     return Column(
       children: [
-        // Start Inventory button and timestamp
+        // Status display based on mode
+        _buildStatusDisplay(tabKey),
+        // Start Inventory buttons
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
               ElevatedButton.icon(
-                onPressed: () => _startInventorySession(tabKey),
-                icon: const Icon(Icons.play_arrow),
-                label: const Text("Start Inventory"),
+                onPressed: () => _startTruckInventorySession(tabKey),
+                icon: const Icon(Icons.local_shipping),
+                label: const Text("Start Truck Inventory"),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
                 ),
               ),
-              const SizedBox(width: 16),
-              Text(
-                "Last Started: ${_formatTimestamp(lastStarted)}",
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _startHomeInventorySession(tabKey),
+                icon: const Icon(Icons.home),
+                label: const Text("Start Home Inventory"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
                 ),
               ),
             ],
@@ -569,18 +830,32 @@ class _InventoryScreenState extends State<InventoryScreen>
       }).toList();
     }
 
-    // Apply status filter
+    // Apply status filter based on mode
     if (_statusFilter != InventoryFilter.all) {
       filteredDocs = filteredDocs.where((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        final truckVerifiedAt = data["truckVerifiedAt"];
 
-        if (_statusFilter == InventoryFilter.verified) {
-          return truckVerifiedAt != null;
-        } else if (_statusFilter == InventoryFilter.notVerified) {
-          return truckVerifiedAt == null;
+        if (_mode == InventoryMode.truck) {
+          final verified = data["truckVerifiedAt"] != null;
+          return _statusFilter == InventoryFilter.verified
+              ? verified
+              : !verified;
+        } else if (_mode == InventoryMode.home) {
+          final verified = data["homeVerifiedAt"] != null;
+          return _statusFilter == InventoryFilter.verified
+              ? verified
+              : !verified;
+        } else {
+          // Both: item passes if both are verified (for verified filter)
+          // or if either is not verified (for not verified filter)
+          final truckVerified = data["truckVerifiedAt"] != null;
+          final homeVerified = data["homeVerifiedAt"] != null;
+          if (_statusFilter == InventoryFilter.verified) {
+            return truckVerified && homeVerified;
+          } else {
+            return !truckVerified || !homeVerified;
+          }
         }
-        return true;
       }).toList();
     }
 
@@ -679,6 +954,7 @@ class _InventoryScreenState extends State<InventoryScreen>
               doc: doc,
               isSelected: _selectedIds.contains(doc.id),
               onSelectionToggle: () => _toggleSelection(doc.id),
+              mode: _mode,
             ),
           ),
       ],

@@ -4,7 +4,12 @@ import '../services/inventory_service.dart';
 
 class EditItemScreen extends StatefulWidget {
   final QueryDocumentSnapshot doc;
-  const EditItemScreen({super.key, required this.doc});
+  final bool hideQuantities;
+  const EditItemScreen({
+    super.key,
+    required this.doc,
+    this.hideQuantities = false,
+  });
 
   @override
   State<EditItemScreen> createState() => _EditItemScreenState();
@@ -124,8 +129,10 @@ class _EditItemScreenState extends State<EditItemScreen> {
             _unitDropdown(),
             if (showOtherUnit) _field("Custom Unit", otherUnitCtl, false),
             _field("Used Per Service", usedPerServiceCtl, true),
-            _field("Truck Quantity", truckQtyCtl, true),
-            _field("Home Quantity", homeQtyCtl, true),
+            if (!widget.hideQuantities)
+              _field("Truck Quantity", truckQtyCtl, true),
+            if (!widget.hideQuantities)
+              _field("Home Quantity", homeQtyCtl, true),
             _field("Model / SKU (Optional)", modelCtl, false),
             const SizedBox(height: 16),
             const Divider(),
@@ -165,9 +172,6 @@ class _EditItemScreenState extends State<EditItemScreen> {
       return;
     }
 
-    final truckQty = double.tryParse(truckQtyCtl.text) ?? 0.0;
-    final homeQty = double.tryParse(homeQtyCtl.text) ?? 0.0;
-
     String finalUnit = selectedUnit == "other"
         ? otherUnitCtl.text.trim()
         : selectedUnit;
@@ -178,12 +182,15 @@ class _EditItemScreenState extends State<EditItemScreen> {
       "category": selectedCategory,
       "inventoryFrequency": selectedFrequency,
       "usedPerService": usedPer,
-      "truckQuantity": truckQty,
-      "homeQuantity": homeQty,
       "unitType": finalUnit,
       "model": modelCtl.text.trim(),
       "overrideWarnings": overrideWarnings,
     };
+
+    if (!widget.hideQuantities) {
+      updates["truckQuantity"] = double.tryParse(truckQtyCtl.text) ?? 0.0;
+      updates["homeQuantity"] = double.tryParse(homeQtyCtl.text) ?? 0.0;
+    }
 
     if (overrideWarnings) {
       updates["gettingLowServices"] =

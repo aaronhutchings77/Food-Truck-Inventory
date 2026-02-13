@@ -21,6 +21,14 @@ class GlobalSettings {
     return _inventorySessions["lastInventoryStartedAt_$tabKey"];
   }
 
+  static Timestamp? getTruckInventorySession(String tabKey) {
+    return _inventorySessions["lastTruckInventoryStartedAt_$tabKey"];
+  }
+
+  static Timestamp? getHomeInventorySession(String tabKey) {
+    return _inventorySessions["lastHomeInventoryStartedAt_$tabKey"];
+  }
+
   static void initialize(Map<String, int> settings) {
     _targetServices = settings["targetServices"] ?? 5;
     _truckTargetServices = settings["truckTargetServices"] ?? 3;
@@ -34,6 +42,14 @@ class GlobalSettings {
 
   static Future<void> updateInventorySession(String tabKey) async {
     await _settingsService.updateInventorySession(tabKey);
+  }
+
+  static Future<void> updateTruckInventorySession(String tabKey) async {
+    await _settingsService.updateTruckInventorySession(tabKey);
+  }
+
+  static Future<void> updateHomeInventorySession(String tabKey) async {
+    await _settingsService.updateHomeInventorySession(tabKey);
   }
 
   static Future<void> updateAll({

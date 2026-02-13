@@ -67,9 +67,25 @@ class _MainScreenState extends State<MainScreen> {
                 MaterialPageRoute(builder: (_) => const AddItemScreen()),
               ),
             ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => FirebaseAuth.instance.signOut(),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.settings),
+            onSelected: (value) {
+              if (value == 'logout') {
+                FirebaseAuth.instance.signOut();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout),
+                    SizedBox(width: 8),
+                    Text('Log Off'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

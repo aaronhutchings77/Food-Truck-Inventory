@@ -4,17 +4,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/inventory_service.dart';
 import '../settings/global_settings.dart';
 import '../screens/edit_item_screen.dart';
+import '../models/inventory_mode.dart';
 
 class InventoryCard extends StatefulWidget {
   final QueryDocumentSnapshot doc;
   final bool isSelected;
   final VoidCallback? onSelectionToggle;
+  final InventoryMode mode;
 
   const InventoryCard({
     super.key,
     required this.doc,
     this.isSelected = false,
     this.onSelectionToggle,
+    this.mode = InventoryMode.truck,
   });
 
   /// Calculate services remaining for an item document.
@@ -67,20 +70,25 @@ class _InventoryCardState extends State<InventoryCard> {
   final _service = InventoryService();
   final _truckCtl = TextEditingController();
   final _truckFocus = FocusNode();
+  final _homeCtl = TextEditingController();
+  final _homeFocus = FocusNode();
   Timer? _truckDebounce;
+  Timer? _homeDebounce;
   double _lastSavedTruckValue = 0.0;
+  double _lastSavedHomeValue = 0.0;
 
   @override
   void initState() {
     super.initState();
     _syncController();
     _truckFocus.addListener(_onTruckFocusChange);
+    _homeFocus.addListener(_onHomeFocusChange);
   }
 
   @override
   void didUpdateWidget(covariant InventoryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.doc.id != widget.doc.id) {
+    if (oldWidget.doc.id != widget.doc.id || oldWidget.mode != widget.mode) {
       _syncController();
     } else {
       final oldData = oldWidget.doc.data() as Map<String, dynamic>;
@@ -91,9 +99,17 @@ class _InventoryCardState extends State<InventoryCard> {
       final newTruck =
           (newData["truckQuantity"] ?? newData["truckAmount"] ?? 0.0)
               .toDouble();
+      final oldHome = (oldData["homeQuantity"] ?? oldData["homeAmount"] ?? 0.0)
+          .toDouble();
+      final newHome = (newData["homeQuantity"] ?? newData["homeAmount"] ?? 0.0)
+          .toDouble();
       if (oldTruck != newTruck && !_truckFocus.hasFocus) {
         _lastSavedTruckValue = newTruck;
         _truckCtl.text = _formatQty(newTruck);
+      }
+      if (oldHome != newHome && !_homeFocus.hasFocus) {
+        _lastSavedHomeValue = newHome;
+        _homeCtl.text = _formatQty(newHome);
       }
     }
   }
@@ -102,7 +118,10 @@ class _InventoryCardState extends State<InventoryCard> {
     final data = widget.doc.data() as Map<String, dynamic>;
     _lastSavedTruckValue = (data["truckQuantity"] ?? data["truckAmount"] ?? 0.0)
         .toDouble();
+    _lastSavedHomeValue = (data["homeQuantity"] ?? data["homeAmount"] ?? 0.0)
+        .toDouble();
     _truckCtl.text = _formatQty(_lastSavedTruckValue);
+    _homeCtl.text = _formatQty(_lastSavedHomeValue);
   }
 
   String _formatQty(double val) {
@@ -114,9 +133,13 @@ class _InventoryCardState extends State<InventoryCard> {
   @override
   void dispose() {
     _truckDebounce?.cancel();
+    _homeDebounce?.cancel();
     _truckFocus.removeListener(_onTruckFocusChange);
+    _homeFocus.removeListener(_onHomeFocusChange);
     _truckFocus.dispose();
+    _homeFocus.dispose();
     _truckCtl.dispose();
+    _homeCtl.dispose();
     super.dispose();
   }
 
@@ -127,10 +150,24 @@ class _InventoryCardState extends State<InventoryCard> {
     }
   }
 
+  void _onHomeFocusChange() {
+    if (!_homeFocus.hasFocus) {
+      _homeDebounce?.cancel();
+      _saveHome(_homeCtl.text);
+    }
+  }
+
   void _onTruckChanged(String value) {
     _truckDebounce?.cancel();
     _truckDebounce = Timer(const Duration(milliseconds: 500), () {
       _saveTruck(value);
+    });
+  }
+
+  void _onHomeChanged(String value) {
+    _homeDebounce?.cancel();
+    _homeDebounce = Timer(const Duration(milliseconds: 500), () {
+      _saveHome(value);
     });
   }
 
@@ -145,8 +182,23 @@ class _InventoryCardState extends State<InventoryCard> {
     }
   }
 
+  void _saveHome(String value) {
+    final val = double.tryParse(value);
+    if (val != null && val >= 0) {
+      // Only proceed if the value actually changed
+      if (val != _lastSavedHomeValue) {
+        _updateHomeWithVerification(val);
+        _lastSavedHomeValue = val;
+      }
+    }
+  }
+
   void _updateTruckWithVerification(double newValue) async {
     await _service.updateTruckQuantityWithVerification(widget.doc.id, newValue);
+  }
+
+  void _updateHomeWithVerification(double newValue) async {
+    await _service.updateHomeQuantityWithVerification(widget.doc.id, newValue);
   }
 
   void _toggleTruckVerified(Map<String, dynamic> data) {
@@ -154,11 +206,17 @@ class _InventoryCardState extends State<InventoryCard> {
     _service.setTruckVerified(widget.doc.id, !isVerified);
   }
 
+  void _toggleHomeVerified(Map<String, dynamic> data) {
+    final isVerified = data["homeVerifiedAt"] != null;
+    _service.setHomeVerified(widget.doc.id, !isVerified);
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = widget.doc.data() as Map<String, dynamic>;
     final name = data["name"] ?? "";
-    final isVerified = data["truckVerifiedAt"] != null;
+    final truckVerified = data["truckVerifiedAt"] != null;
+    final homeVerified = data["homeVerifiedAt"] != null;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -228,74 +286,104 @@ class _InventoryCardState extends State<InventoryCard> {
               ],
             ),
             const SizedBox(height: 12),
-            // Truck label + numeric input + Verified
-            Padding(
-              padding: const EdgeInsets.only(left: 48),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Truck",
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 6),
-                  SizedBox(
-                    width: 120,
-                    height: 48,
-                    child: TextField(
-                      controller: _truckCtl,
-                      focusNode: _truckFocus,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 20),
-                      decoration: InputDecoration(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 12,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                      onChanged: _onTruckChanged,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // Verified checkbox
-                  InkWell(
-                    onTap: () => _toggleTruckVerified(data),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: Checkbox(
-                            value: isVerified,
-                            onChanged: (_) => _toggleTruckVerified(data),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          "Verified",
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w500,
-                            color: isVerified
-                                ? Colors.green.shade700
-                                : Colors.grey.shade600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+            // Quantity sections based on mode
+            if (widget.mode == InventoryMode.truck ||
+                widget.mode == InventoryMode.both)
+              _buildQuantitySection(
+                "Truck",
+                _truckCtl,
+                _truckFocus,
+                _onTruckChanged,
+                truckVerified,
+                () => _toggleTruckVerified(data),
               ),
-            ),
+            if (widget.mode == InventoryMode.home ||
+                widget.mode == InventoryMode.both)
+              _buildQuantitySection(
+                "Home",
+                _homeCtl,
+                _homeFocus,
+                _onHomeChanged,
+                homeVerified,
+                () => _toggleHomeVerified(data),
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildQuantitySection(
+    String label,
+    TextEditingController controller,
+    FocusNode focusNode,
+    Function(String) onChanged,
+    bool isVerified,
+    VoidCallback onToggleVerified,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 48),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: 120,
+            height: 48,
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 20),
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              onChanged: onChanged,
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Verified checkbox
+          InkWell(
+            onTap: onToggleVerified,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: Checkbox(
+                    value: isVerified,
+                    onChanged: (_) => onToggleVerified(),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  "Verified",
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w500,
+                    color: isVerified
+                        ? Colors.green.shade700
+                        : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
