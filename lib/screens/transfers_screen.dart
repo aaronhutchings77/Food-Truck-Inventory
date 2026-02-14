@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/transfer_card.dart';
@@ -84,9 +85,8 @@ class _TransfersScreenState extends State<TransfersScreen> {
 
                   final docs = _filterBySearch(snapshot.data!.docs);
 
-                  final List<_TransferItem> moveFromHome = [];
-                  final List<_TransferItem> buyAndMove = [];
-                  final List<_TransferItem> buyOnly = [];
+                  final List<_TransferItem> requiredForTomorrow = [];
+                  final List<_TransferItem> belowIdealTarget = [];
 
                   for (final doc in docs) {
                     final data = doc.data() as Map<String, dynamic>;
@@ -95,52 +95,37 @@ class _TransfersScreenState extends State<TransfersScreen> {
 
                     final item = _TransferItem(
                       doc: doc,
-                      transferAmount: result.transferAmount,
-                      truckRequired: result.truckRequired,
-                      type: result.type,
+                      section: result.section,
+                      requiredAmount: result.requiredAmount,
+                      truckAmount: result.truckAmount,
+                      homeAmount: result.homeAmount,
+                      canMoveNow: result.canMoveNow,
+                      truckAfterTransfer: result.truckAfterTransfer,
+                      stillShort: result.stillShort,
+                      canCoverTomorrow: result.canCoverTomorrow,
+                      stillShortToIdeal: result.stillShortToIdeal,
                     );
 
-                    switch (result.type) {
-                      case "move":
-                        moveFromHome.add(item);
-                        break;
-                      case "buyAndMove":
-                        buyAndMove.add(item);
-                        break;
-                      case "buyOnly":
-                        buyOnly.add(item);
-                        break;
+                    if (result.section == "requiredForTomorrow") {
+                      requiredForTomorrow.add(item);
+                    } else {
+                      belowIdealTarget.add(item);
                     }
                   }
 
-                  // Sort items alphabetically within each transfer section
-                  moveFromHome.sort((a, b) {
+                  // Sort items alphabetically within each section
+                  int alphabetical(_TransferItem a, _TransferItem b) {
                     final aName =
                         (a.doc.data() as Map<String, dynamic>)["name"] ?? "";
                     final bName =
                         (b.doc.data() as Map<String, dynamic>)["name"] ?? "";
                     return aName.toLowerCase().compareTo(bName.toLowerCase());
-                  });
+                  }
 
-                  buyAndMove.sort((a, b) {
-                    final aName =
-                        (a.doc.data() as Map<String, dynamic>)["name"] ?? "";
-                    final bName =
-                        (b.doc.data() as Map<String, dynamic>)["name"] ?? "";
-                    return aName.toLowerCase().compareTo(bName.toLowerCase());
-                  });
+                  requiredForTomorrow.sort(alphabetical);
+                  belowIdealTarget.sort(alphabetical);
 
-                  buyOnly.sort((a, b) {
-                    final aName =
-                        (a.doc.data() as Map<String, dynamic>)["name"] ?? "";
-                    final bName =
-                        (b.doc.data() as Map<String, dynamic>)["name"] ?? "";
-                    return aName.toLowerCase().compareTo(bName.toLowerCase());
-                  });
-
-                  if (moveFromHome.isEmpty &&
-                      buyAndMove.isEmpty &&
-                      buyOnly.isEmpty) {
+                  if (requiredForTomorrow.isEmpty && belowIdealTarget.isEmpty) {
                     return const Center(
                       child: Text(
                         "Truck is fully stocked!",
@@ -151,23 +136,19 @@ class _TransfersScreenState extends State<TransfersScreen> {
 
                   return ListView(
                     children: [
-                      _collapsibleSection(
-                        "Move From Home",
-                        Icons.home,
-                        Colors.blue,
-                        moveFromHome,
+                      _buildSection(
+                        "Required for Tomorrow",
+                        Icons.warning_amber_rounded,
+                        Colors.red,
+                        requiredForTomorrow,
+                        initiallyExpanded: true,
                       ),
-                      _collapsibleSection(
-                        "Buy + Move",
-                        Icons.shopping_cart,
+                      _buildSection(
+                        "Below Ideal Target",
+                        Icons.trending_down,
                         Colors.orange,
-                        buyAndMove,
-                      ),
-                      _collapsibleSection(
-                        "Buy Only",
-                        Icons.store,
-                        Colors.green,
-                        buyOnly,
+                        belowIdealTarget,
+                        initiallyExpanded: false,
                       ),
                     ],
                   );
@@ -180,7 +161,8 @@ class _TransfersScreenState extends State<TransfersScreen> {
     );
   }
 
-  /// Classify an item into transfer type based on the transfer logic.
+  /// Classify an item into a transfer section.
+  /// Returns null if no transfer is needed.
   _TransferResult? _classifyItem(Map<String, dynamic> data) {
     double usedPer = (data["usedPerService"] ?? data["qtyPerService"] ?? 0.0)
         .toDouble();
@@ -191,55 +173,70 @@ class _TransfersScreenState extends State<TransfersScreen> {
 
     if (usedPer <= 0) return null;
 
-    // effectiveTruckTarget
-    int? override = data["overrideTruckTargetServices"] as int?;
-    int effectiveTruckTarget = override ?? GlobalSettings.truckTargetServices;
+    // Explicit null check: only null falls back to global. 0 is a valid override.
+    final dynamic rawOverride = data["overrideTruckTargetServices"];
+    final int effectiveTruckTarget = rawOverride != null
+        ? (rawOverride as num).toInt()
+        : GlobalSettings.truckTargetServices;
 
-    double truckRequired = usedPer * effectiveTruckTarget;
+    // If override is 0, this is a home-only item — never needs transfer
+    if (effectiveTruckTarget == 0) return null;
 
-    // If truck already has enough, no transfer needed
-    if (truck >= truckRequired) return null;
+    double requiredForOneService = usedPer * 1;
+    double requiredForIdeal = usedPer * effectiveTruckTarget;
 
-    double transferAmount = truckRequired - truck;
+    // Section 1: Required for Tomorrow — truck < requiredForOneService
+    if (truck < requiredForOneService) {
+      double canMoveNow = math.min(home, requiredForOneService - truck);
+      double truckAfterTransfer = truck + canMoveNow;
+      bool canCoverTomorrow = truckAfterTransfer >= requiredForOneService;
+      double stillShort = canCoverTomorrow
+          ? 0
+          : requiredForOneService - truckAfterTransfer;
 
-    if (home >= transferAmount) {
-      // Can move from home
       return _TransferResult(
-        type: "move",
-        transferAmount: transferAmount,
-        truckRequired: truckRequired,
+        section: "requiredForTomorrow",
+        requiredAmount: requiredForOneService,
+        truckAmount: truck,
+        homeAmount: home,
+        canMoveNow: canMoveNow,
+        truckAfterTransfer: truckAfterTransfer,
+        canCoverTomorrow: canCoverTomorrow,
+        stillShort: stillShort,
+        stillShortToIdeal: 0,
       );
-    } else {
-      // Not enough at home — need to buy
-      // Check if there's also a shopping need (totalAvailable < overallRequired)
-      double totalAvailable = truck + home;
-      double overallRequired = usedPer * GlobalSettings.targetServices;
-
-      if (totalAvailable < overallRequired) {
-        // Need to buy AND transfer
-        return _TransferResult(
-          type: "buyAndMove",
-          transferAmount: transferAmount,
-          truckRequired: truckRequired,
-        );
-      } else {
-        // Have enough overall but not on truck, and not enough at home to move
-        // Still need to buy for the truck specifically
-        return _TransferResult(
-          type: "buyOnly",
-          transferAmount: transferAmount,
-          truckRequired: truckRequired,
-        );
-      }
     }
+
+    // Section 2: Below Ideal Target — truck >= 1 service but < ideal
+    if (truck < requiredForIdeal) {
+      double canMoveNow = math.min(home, requiredForIdeal - truck);
+      double truckAfterTransfer = truck + canMoveNow;
+      double stillShortToIdeal = math.max(0, requiredForIdeal - (truck + home));
+
+      return _TransferResult(
+        section: "belowIdealTarget",
+        requiredAmount: requiredForIdeal,
+        truckAmount: truck,
+        homeAmount: home,
+        canMoveNow: canMoveNow,
+        truckAfterTransfer: truckAfterTransfer,
+        canCoverTomorrow: true,
+        stillShort: 0,
+        stillShortToIdeal: stillShortToIdeal,
+      );
+    }
+
+    // Truck is at or above ideal — no transfer needed
+    return null;
   }
 
-  Widget _collapsibleSection(
+  Widget _buildSection(
     String title,
     IconData icon,
     Color color,
-    List<_TransferItem> items,
-  ) {
+    List<_TransferItem> items, {
+    required bool initiallyExpanded,
+  }) {
     if (items.isEmpty) return const SizedBox();
 
     return Card(
@@ -250,14 +247,20 @@ class _TransfersScreenState extends State<TransfersScreen> {
           "$title (${items.length})",
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
-        initiallyExpanded: false,
+        initiallyExpanded: initiallyExpanded,
         children: items
             .map(
               (item) => TransferCard(
                 doc: item.doc,
-                transferAmount: item.transferAmount,
-                truckRequired: item.truckRequired,
-                transferType: item.type,
+                section: item.section,
+                requiredAmount: item.requiredAmount,
+                truckAmount: item.truckAmount,
+                homeAmount: item.homeAmount,
+                canMoveNow: item.canMoveNow,
+                truckAfterTransfer: item.truckAfterTransfer,
+                canCoverTomorrow: item.canCoverTomorrow,
+                stillShort: item.stillShort,
+                stillShortToIdeal: item.stillShortToIdeal,
               ),
             )
             .toList(),
@@ -267,27 +270,51 @@ class _TransfersScreenState extends State<TransfersScreen> {
 }
 
 class _TransferResult {
-  final String type;
-  final double transferAmount;
-  final double truckRequired;
+  final String section;
+  final double requiredAmount;
+  final double truckAmount;
+  final double homeAmount;
+  final double canMoveNow;
+  final double truckAfterTransfer;
+  final bool canCoverTomorrow;
+  final double stillShort;
+  final double stillShortToIdeal;
 
   _TransferResult({
-    required this.type,
-    required this.transferAmount,
-    required this.truckRequired,
+    required this.section,
+    required this.requiredAmount,
+    required this.truckAmount,
+    required this.homeAmount,
+    required this.canMoveNow,
+    required this.truckAfterTransfer,
+    required this.canCoverTomorrow,
+    required this.stillShort,
+    required this.stillShortToIdeal,
   });
 }
 
 class _TransferItem {
   final QueryDocumentSnapshot doc;
-  final double transferAmount;
-  final double truckRequired;
-  final String type;
+  final String section;
+  final double requiredAmount;
+  final double truckAmount;
+  final double homeAmount;
+  final double canMoveNow;
+  final double truckAfterTransfer;
+  final bool canCoverTomorrow;
+  final double stillShort;
+  final double stillShortToIdeal;
 
   _TransferItem({
     required this.doc,
-    required this.transferAmount,
-    required this.truckRequired,
-    required this.type,
+    required this.section,
+    required this.requiredAmount,
+    required this.truckAmount,
+    required this.homeAmount,
+    required this.canMoveNow,
+    required this.truckAfterTransfer,
+    required this.canCoverTomorrow,
+    required this.stillShort,
+    required this.stillShortToIdeal,
   });
 }

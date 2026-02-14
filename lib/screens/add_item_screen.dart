@@ -126,7 +126,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
     if (overrideTruckTarget) {
       final val = int.tryParse(overrideTruckTargetCtl.text);
-      if (val != null && val > 0) {
+      if (val != null && val >= 0) {
         itemData["overrideTruckTargetServices"] = val;
       }
     }

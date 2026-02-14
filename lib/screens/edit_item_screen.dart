@@ -200,7 +200,7 @@ class _EditItemScreenState extends State<EditItemScreen> {
 
     if (overrideTruckTarget) {
       final val = int.tryParse(overrideTruckTargetCtl.text);
-      if (val != null && val > 0) {
+      if (val != null && val >= 0) {
         updates["overrideTruckTargetServices"] = val;
       } else {
         updates["overrideTruckTargetServices"] = FieldValue.delete();
