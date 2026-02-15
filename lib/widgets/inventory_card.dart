@@ -11,6 +11,8 @@ class InventoryCard extends StatefulWidget {
   final bool isSelected;
   final VoidCallback? onSelectionToggle;
   final InventoryMode mode;
+  final bool showFrequency;
+  final bool isAllTab;
 
   const InventoryCard({
     super.key,
@@ -18,6 +20,8 @@ class InventoryCard extends StatefulWidget {
     this.isSelected = false,
     this.onSelectionToggle,
     this.mode = InventoryMode.truck,
+    this.showFrequency = false,
+    this.isAllTab = false,
   });
 
   /// Calculate services remaining for an item document.
@@ -88,7 +92,9 @@ class _InventoryCardState extends State<InventoryCard> {
   @override
   void didUpdateWidget(covariant InventoryCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.doc.id != widget.doc.id || oldWidget.mode != widget.mode) {
+    if (oldWidget.doc.id != widget.doc.id ||
+        oldWidget.mode != widget.mode ||
+        oldWidget.isAllTab != widget.isAllTab) {
       _syncController();
     } else {
       final oldData = oldWidget.doc.data() as Map<String, dynamic>;
@@ -215,6 +221,10 @@ class _InventoryCardState extends State<InventoryCard> {
   Widget build(BuildContext context) {
     final data = widget.doc.data() as Map<String, dynamic>;
     final name = data["name"] ?? "";
+    final unitType = data["unitType"] as String?;
+    final displayName = unitType != null && unitType.isNotEmpty
+        ? "$name \u2013 $unitType"
+        : name;
     final truckVerified = data["truckVerifiedAt"] != null;
     final homeVerified = data["homeVerifiedAt"] != null;
 
@@ -240,7 +250,7 @@ class _InventoryCardState extends State<InventoryCard> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    name,
+                    displayName,
                     style: const TextStyle(
                       fontSize: 21,
                       fontWeight: FontWeight.w600,
@@ -285,31 +295,153 @@ class _InventoryCardState extends State<InventoryCard> {
                 ),
               ],
             ),
+            // Frequency label (All tab only)
+            if (widget.showFrequency) ...[
+              Padding(
+                padding: const EdgeInsets.only(left: 48),
+                child: Text(
+                  _frequencyLabel(data),
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                ),
+              ),
+            ],
             const SizedBox(height: 6),
-            // Quantity sections based on mode
-            if (widget.mode == InventoryMode.truck ||
-                widget.mode == InventoryMode.both)
-              _buildQuantitySection(
-                "Truck",
-                _truckCtl,
-                _truckFocus,
-                _onTruckChanged,
+            // Quantity sections
+            if (widget.isAllTab)
+              _buildHorizontalBothSection(
                 truckVerified,
-                () => _toggleTruckVerified(data),
-              ),
-            if (widget.mode == InventoryMode.home ||
-                widget.mode == InventoryMode.both)
-              _buildQuantitySection(
-                "Home",
-                _homeCtl,
-                _homeFocus,
-                _onHomeChanged,
                 homeVerified,
+                () => _toggleTruckVerified(data),
                 () => _toggleHomeVerified(data),
-              ),
+              )
+            else ...[
+              if (widget.mode == InventoryMode.truck ||
+                  widget.mode == InventoryMode.both)
+                _buildQuantitySection(
+                  "Truck",
+                  _truckCtl,
+                  _truckFocus,
+                  _onTruckChanged,
+                  truckVerified,
+                  () => _toggleTruckVerified(data),
+                ),
+              if (widget.mode == InventoryMode.home ||
+                  widget.mode == InventoryMode.both)
+                _buildQuantitySection(
+                  "Home",
+                  _homeCtl,
+                  _homeFocus,
+                  _onHomeChanged,
+                  homeVerified,
+                  () => _toggleHomeVerified(data),
+                ),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  String _frequencyLabel(Map<String, dynamic> data) {
+    final freq =
+        data["inventoryFrequency"] ?? data["checkFrequency"] ?? "perService";
+    switch (freq) {
+      case "perService":
+      case "service":
+        return "Per Service";
+      case "daily":
+        return "Daily";
+      case "weekly":
+        return "Weekly";
+      case "monthly":
+        return "Monthly";
+      case "quarterly":
+        return "Quarterly";
+      default:
+        return freq.toString();
+    }
+  }
+
+  Widget _buildHorizontalBothSection(
+    bool truckVerified,
+    bool homeVerified,
+    VoidCallback onToggleTruckVerified,
+    VoidCallback onToggleHomeVerified,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 48),
+      child: Row(
+        children: [
+          // Truck section
+          _buildCompactQuantity(
+            "Truck",
+            _truckCtl,
+            _truckFocus,
+            _onTruckChanged,
+            truckVerified,
+            onToggleTruckVerified,
+          ),
+          const SizedBox(width: 16),
+          // Home section
+          _buildCompactQuantity(
+            "Home",
+            _homeCtl,
+            _homeFocus,
+            _onHomeChanged,
+            homeVerified,
+            onToggleHomeVerified,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactQuantity(
+    String label,
+    TextEditingController controller,
+    FocusNode focusNode,
+    Function(String) onChanged,
+    bool isVerified,
+    VoidCallback onToggleVerified,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(width: 6),
+        SizedBox(
+          width: 64,
+          height: 40,
+          child: TextField(
+            controller: controller,
+            focusNode: focusNode,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 16),
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: 8,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 40,
+          height: 40,
+          child: Checkbox(
+            value: isVerified,
+            onChanged: (_) => onToggleVerified(),
+          ),
+        ),
+      ],
     );
   }
 

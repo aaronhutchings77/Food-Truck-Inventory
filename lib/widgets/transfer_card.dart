@@ -38,8 +38,12 @@ class TransferCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = doc.data() as Map<String, dynamic>;
-    final name = data["name"] ?? "";
+    final rawName = data["name"] ?? "";
     final unitType = data["unitType"] ?? "units";
+    final rawUnitType = data["unitType"] as String?;
+    final name = (rawUnitType != null && rawUnitType.isNotEmpty)
+        ? "$rawName \u2013 $rawUnitType"
+        : rawName;
 
     final bool isShort = section == "requiredForTomorrow" && !canCoverTomorrow;
 

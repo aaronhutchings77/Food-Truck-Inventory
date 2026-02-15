@@ -86,10 +86,17 @@ class ShoppingCard extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Item name
+            // Item name with unit type
             Text(
-              data["name"] ?? "",
+              () {
+                final name = data["name"] ?? "";
+                final ut = data["unitType"] as String?;
+                return (ut != null && ut.isNotEmpty)
+                    ? "$name \u2013 $ut"
+                    : name;
+              }(),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
             ),
             // Status indicator badge on its own line
             if (isCritical(data))
