@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'inventory_screen.dart';
 import 'shopping_screen.dart';
 import 'transfers_screen.dart';
+import 'service_screen.dart';
 import 'add_item_screen.dart';
 import 'settings_screen.dart';
 import '../services/settings_service.dart';
@@ -51,9 +52,28 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  // Key to control InventoryScreen tab from outside
+  final GlobalKey<InventoryScreenState> _inventoryKey = GlobalKey();
+
+  void _navigateToInventoryTab(int tabIndex) {
+    setState(() {
+      index = 0;
+    });
+    // After frame, switch to the requested tab
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _inventoryKey.currentState?.switchToTab(tabIndex);
+    });
+  }
+
+  void _navigateToService() {
+    setState(() {
+      index = 3;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final titles = ["Inventory", "Shopping", "Transfers"];
+    final titles = ["Inventory", "Shopping", "Transfers", "Service"];
 
     return Scaffold(
       appBar: AppBar(
@@ -101,6 +121,10 @@ class _MainScreenState extends State<MainScreen> {
               icon: Icon(Icons.swap_horiz),
               label: "Transfers",
             ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.build_circle),
+              label: "Service",
+            ),
           ],
         ),
       ),
@@ -110,13 +134,21 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildBody() {
     switch (index) {
       case 0:
-        return const InventoryScreen();
+        return InventoryScreen(
+          key: _inventoryKey,
+          onNavigateToService: _navigateToService,
+        );
       case 1:
         return const ShoppingScreen();
       case 2:
         return const TransfersScreen();
+      case 3:
+        return ServiceScreen(onNavigateToInventory: _navigateToInventoryTab);
       default:
-        return const InventoryScreen();
+        return InventoryScreen(
+          key: _inventoryKey,
+          onNavigateToService: _navigateToService,
+        );
     }
   }
 }

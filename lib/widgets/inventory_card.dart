@@ -349,14 +349,10 @@ class _InventoryCardState extends State<InventoryCard> {
       case "perService":
       case "service":
         return "Per Service";
-      case "daily":
-        return "Daily";
       case "weekly":
         return "Weekly";
       case "monthly":
         return "Monthly";
-      case "quarterly":
-        return "Quarterly";
       default:
         return freq.toString();
     }

@@ -30,39 +30,28 @@ class SettingsService {
       return {
         "lastInventoryStartedAt_perService":
             data["lastInventoryStartedAt_perService"],
-        "lastInventoryStartedAt_daily": data["lastInventoryStartedAt_daily"],
         "lastInventoryStartedAt_weekly": data["lastInventoryStartedAt_weekly"],
         "lastInventoryStartedAt_monthly":
             data["lastInventoryStartedAt_monthly"],
-        "lastInventoryStartedAt_quarterly":
-            data["lastInventoryStartedAt_quarterly"],
         "lastInventoryStartedAt_warnings":
             data["lastInventoryStartedAt_warnings"],
         "lastInventoryStartedAt_all": data["lastInventoryStartedAt_all"],
         "lastTruckInventoryStartedAt_perService":
             data["lastTruckInventoryStartedAt_perService"],
-        "lastTruckInventoryStartedAt_daily":
-            data["lastTruckInventoryStartedAt_daily"],
         "lastTruckInventoryStartedAt_weekly":
             data["lastTruckInventoryStartedAt_weekly"],
         "lastTruckInventoryStartedAt_monthly":
             data["lastTruckInventoryStartedAt_monthly"],
-        "lastTruckInventoryStartedAt_quarterly":
-            data["lastTruckInventoryStartedAt_quarterly"],
         "lastTruckInventoryStartedAt_warnings":
             data["lastTruckInventoryStartedAt_warnings"],
         "lastTruckInventoryStartedAt_all":
             data["lastTruckInventoryStartedAt_all"],
         "lastHomeInventoryStartedAt_perService":
             data["lastHomeInventoryStartedAt_perService"],
-        "lastHomeInventoryStartedAt_daily":
-            data["lastHomeInventoryStartedAt_daily"],
         "lastHomeInventoryStartedAt_weekly":
             data["lastHomeInventoryStartedAt_weekly"],
         "lastHomeInventoryStartedAt_monthly":
             data["lastHomeInventoryStartedAt_monthly"],
-        "lastHomeInventoryStartedAt_quarterly":
-            data["lastHomeInventoryStartedAt_quarterly"],
         "lastHomeInventoryStartedAt_warnings":
             data["lastHomeInventoryStartedAt_warnings"],
         "lastHomeInventoryStartedAt_all":

@@ -186,10 +186,8 @@ class _AddItemScreenState extends State<AddItemScreen> {
         ),
         items: const [
           DropdownMenuItem(value: "perService", child: Text("Per Service")),
-          DropdownMenuItem(value: "daily", child: Text("Daily")),
           DropdownMenuItem(value: "weekly", child: Text("Weekly")),
           DropdownMenuItem(value: "monthly", child: Text("Monthly")),
-          DropdownMenuItem(value: "quarterly", child: Text("Quarterly")),
         ],
         onChanged: (value) => setState(() => selectedFrequency = value!),
       ),

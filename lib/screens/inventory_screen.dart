@@ -3,28 +3,37 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/inventory_card.dart';
 import '../settings/global_settings.dart';
 import '../services/inventory_service.dart';
+import '../services/general_todo_service.dart';
 import '../models/inventory_mode.dart';
 
 class InventoryScreen extends StatefulWidget {
-  const InventoryScreen({super.key});
+  final VoidCallback? onNavigateToService;
+
+  const InventoryScreen({super.key, this.onNavigateToService});
 
   @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
+  InventoryScreenState createState() => InventoryScreenState();
 }
 
 enum InventoryFilter { all, verified, notVerified }
 
-class _InventoryScreenState extends State<InventoryScreen>
+class InventoryScreenState extends State<InventoryScreen>
     with SingleTickerProviderStateMixin {
+  /// Switch to a specific tab index from outside
+  void switchToTab(int tabIndex) {
+    if (tabIndex >= 0 && tabIndex < _tabs.length) {
+      _tabController.animateTo(tabIndex);
+    }
+  }
+
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   final InventoryService _service = InventoryService();
+  final GeneralTodoService _todoService = GeneralTodoService();
   final List<String> _tabs = [
     "Per Service",
-    "Daily",
     "Weekly",
     "Monthly",
-    "Quarterly",
     "Warnings",
     "All",
   ];
@@ -124,6 +133,117 @@ class _InventoryScreenState extends State<InventoryScreen>
         );
       }
     }
+  }
+
+  Widget _buildReminderBanners() {
+    final now = DateTime.now();
+    final banners = <Widget>[];
+
+    const cadences = {'weekly': 7, 'monthly': 30};
+
+    for (final entry in cadences.entries) {
+      final cadence = entry.key;
+      final days = entry.value;
+      final label = cadence[0].toUpperCase() + cadence.substring(1);
+
+      final truckTs = GlobalSettings.getTruckInventorySession(cadence);
+      final homeTs = GlobalSettings.getHomeInventorySession(cadence);
+
+      if (_isInventoryDue(truckTs, now, days)) {
+        banners.add(
+          _reminderBanner(
+            '$label Truck Inventory Due',
+            Colors.orange.shade100,
+            Colors.orange.shade800,
+          ),
+        );
+      }
+      if (_isInventoryDue(homeTs, now, days)) {
+        banners.add(
+          _reminderBanner(
+            '$label Home Inventory Due',
+            Colors.orange.shade100,
+            Colors.orange.shade800,
+          ),
+        );
+      }
+    }
+
+    if (banners.isEmpty) return const SizedBox.shrink();
+    return Column(children: banners);
+  }
+
+  bool _isInventoryDue(Timestamp? lastStarted, DateTime now, int days) {
+    if (lastStarted == null) return true;
+    final lastDate = lastStarted.toDate();
+    return now.difference(lastDate).inDays >= days;
+  }
+
+  Widget _reminderBanner(String text, Color bgColor, Color textColor) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: bgColor,
+      child: Row(
+        children: [
+          Icon(Icons.schedule, size: 18, color: textColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTodoBanner() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _todoService.getTodosStream(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        final pendingCount = snapshot.data!.docs.where((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return data['completed'] != true;
+        }).length;
+        if (pendingCount == 0) return const SizedBox.shrink();
+        return GestureDetector(
+          onTap: () => widget.onNavigateToService?.call(),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.blue.shade50,
+            child: Row(
+              children: [
+                Icon(Icons.checklist, size: 18, color: Colors.blue.shade800),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$pendingCount To-Do Item${pendingCount == 1 ? '' : 's'} Pending',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue.shade800,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: Colors.blue.shade800,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -309,6 +429,8 @@ class _InventoryScreenState extends State<InventoryScreen>
             return const SizedBox.shrink();
           },
         ),
+        // To-Do count banner
+        _buildTodoBanner(),
         // Keep inventory sessions stream alive for GlobalSettings cache
         StreamBuilder<Map<String, Timestamp?>>(
           stream: GlobalSettings.inventorySessionsStream,
@@ -316,7 +438,8 @@ class _InventoryScreenState extends State<InventoryScreen>
             if (snapshot.hasData) {
               GlobalSettings.initializeInventorySessions(snapshot.data!);
             }
-            return const SizedBox.shrink();
+            // Inventory reminder banners
+            return _buildReminderBanners();
           },
         ),
         TabBar(
@@ -421,10 +544,8 @@ class _InventoryScreenState extends State<InventoryScreen>
             controller: _tabController,
             children: [
               _frequencyTab("perService"),
-              _frequencyTab("daily"),
               _frequencyTab("weekly"),
               _frequencyTab("monthly"),
-              _frequencyTab("quarterly"),
               _warningsTab(),
               _allItemsTab(),
             ],
